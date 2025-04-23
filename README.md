@@ -1,75 +1,105 @@
-Biomedical Detection Tutorial
-This is an open-source project tutorial for object detection in biomedical engineering, designed for educational purposes. It uses real-time laptop camera input to detect eyes, head, arms, arm-fingers, and count people, with a user-friendly frontend interface.
-Features
+# Biomedical Detection Tutorial
 
-Real-time detection:
-Eyes Detection (using MediaPipe Face Mesh)
-Head Detection (using MediaPipe Face Detection)
-Arm Detection (using MediaPipe Pose)
-Arm-Fingers Detection (using MediaPipe Hands)
-People Counting (using MediaPipe Pose)
+This is an open-source project tutorial for object detection in biomedical engineering, designed for educational purposes. It provides a FastAPI backend for detecting eyes, head, arms, arm-fingers, and counting people, with a planned frontend interface.
 
+## Features
 
-Frontend interface with buttons for each detection test (in progress)
-Built with Python, Tkinter, OpenCV, MediaPipe, Nuxt.js, and TailwindCSS
-Deployed on Fly.io (backend) and Vercel (frontend, planned)
+- **Real-time detection** (backend):
+  - Eyes Detection (using MediaPipe Face Mesh)
+  - Head Detection (using MediaPipe Face Detection)
+  - Arm Detection (using MediaPipe Pose)
+  - Arm-Fingers Detection (using MediaPipe Hands)
+  - People Counting (using MediaPipe Pose)
+- FastAPI backend deployed on Fly.io
+- Planned frontend with Vue 3 and TailwindCSS
+- Dockerized for easy deployment
 
-Prerequisites
+## Prerequisites
 
-Ubuntu 20.04 LTS (or compatible system)
-Miniconda installed
-Node.js and npm installed (for frontend)
-Git installed
+- Ubuntu 20.04 LTS (or compatible system)
+- Docker installed
+- Fly.io CLI (`flyctl`) installed
+- Git installed
+- Node.js and npm (for frontend, planned)
 
-Setup Instructions
-Backend Setup
+## Repository Structure
 
-Clone the repository:
-git clone https://github.com/BadrRibzat/biomediacl.git
-cd biomediacl
+- `biomedical-backend/`: FastAPI backend
+  - `app/`: Application code (`main.py`, detection modules)
+  - `Dockerfile`: Docker configuration
+  - `fly.toml`: Fly.io configuration
+  - `requirements.txt`: Python dependencies
+- `README.md`: Project documentation
 
+## Setup Instructions
 
-Create and activate a Conda environment:
-conda create -n biomedical python=3.11
-conda activate biomedical
+### Backend Setup
 
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/BadrRibzat/biomediacl.git
+   cd biomediacl/biomedical-backend
+   ```
 
-Install dependencies:
-conda install opencv
-pip install mediapipe
+2. **Create and activate a virtual environment**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Run any detection script:
-python eyes_detection.py
-python head_detection.py
-python arm_detection.py
-python arm_fingers_detection.py
-python people_counting.py
+4. **Run the FastAPI server locally**:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
+   - Access Swagger UI at `http://localhost:8000/docs`.
 
+5. **Test endpoints**:
+   - Use Swagger UI to test `/detect/arm`, `/detect/arm-fingers`, `/detect/eyes`, `/detect/head`, `/detect/people` with a JPEG image.
 
+### Docker Setup
 
-Frontend Setup
+1. **Build the Docker image**:
+   ```bash
+   docker build -t biomedical-detection .
+   ```
 
-(In progress) Create a Nuxt.js project:
-npx create-nuxt-app biomedical-frontend
-cd biomedical-frontend
-npm install
+2. **Run the Docker container**:
+   ```bash
+   docker run -p 8000:8000 biomedical-detection
+   ```
+   - Test at `http://localhost:8000/docs`.
 
+### Fly.io Deployment
 
-Copy the provided index.vue to pages/index.vue (to be provided).
+1. **Install Fly.io CLI**:
+   ```bash
+   curl -L https://fly.io/install.sh | sh
+   ```
 
-Run the development server:
-npm run dev
+2. **Log in to Fly.io**:
+   ```bash
+   fly auth login
+   ```
 
+3. **Deploy the app**:
+   ```bash
+   fly deploy
+   ```
+   - Access at `https://biomedical-detection.fly.dev/docs` (update with your app URL).
 
+### Frontend Setup
 
-Deployment
+(In progress) To be developed with Vue 3 and TailwindCSS.
 
-Backend: Deploy to Fly.io (instructions TBD).
-Frontend: Deploy to Vercel (instructions TBD).
+## Contributing
 
-Contributing
 This is an open-source project. Feel free to fork, contribute, or suggest improvements!
-License
-MIT License
 
+## License
+
+MIT License
