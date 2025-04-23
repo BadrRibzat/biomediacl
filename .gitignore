@@ -1,0 +1,8 @@
+venv/
+   **pycache**/
+   *.pyc
+   .env
+   Dockerfile.local
+   .dockerignore
+   biomedical-backend/venv/
+   biomedical-backend/__pycache__/
