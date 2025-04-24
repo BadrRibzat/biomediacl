@@ -140,7 +140,7 @@ onMounted(() => {
 
   Promise.all([
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.6/hands.min.js').catch(() => {
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.5/hands.min.js').catch(() => {
       handsFailed.value = true
       console.error('Failed to load MediaPipe Hands script')
     }),
@@ -249,7 +249,7 @@ const startDetection = (endpoint: string) => {
   } else if (endpoint === 'arm-fingers' && !handsFailed.value) {
     try {
       hands = new window.Hands({
-        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.6/${file}`
+        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.5/${file}`
       })
       hands.setOptions({
         maxNumHands: 2,
