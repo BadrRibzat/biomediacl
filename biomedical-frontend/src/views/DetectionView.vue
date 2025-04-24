@@ -138,10 +138,11 @@ onMounted(() => {
     })
   }
 
-  Promise.all([
+Promise.all([
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js'),
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.5/hands.min.js').catch(() => {
       handsFailed.value = true
+      errorMessage.value = 'Failed to load hand detection library. Please check your internet connection or try again later.'
       console.error('Failed to load MediaPipe Hands script')
     }),
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js')
