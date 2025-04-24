@@ -35,8 +35,9 @@
         <button @click="toggleDetection('arm')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
           {{ activeDetection === 'arm' ? 'Stop Arm Detection' : 'Detect Arm' }}
         </button>
-        <button @click="toggleDetection('arm-fingers')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
+        <button @click="toggleDetection('arm-fingers')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive || handsFailed">
           {{ activeDetection === 'arm-fingers' ? 'Stop Arm-Fingers Detection' : 'Detect Arm-Fingers' }}
+          <span v-if="handsFailed" class="text-red-500 text-sm ml-2"> (Failed to load)</span>
         </button>
         <button @click="toggleDetection('eyes')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
           {{ activeDetection === 'eyes' ? 'Stop Eyes Detection' : 'Detect Eyes' }}
@@ -88,7 +89,44 @@
 import { ref, onUnmounted, onMounted } from 'vue'
 import { useDetectionStore } from '../stores/detection'
 
+// Define types for the detection results
+interface ErrorResult {
+  error: string
+}
+
+interface ArmResult {
+  status: string
+  landmarks: {
+    left_shoulder: { x: number; y: number; z: number }
+    left_elbow: { x: number; y: number; z: number }
+    left_wrist: { x: number; y: number; z: number }
+    right_shoulder: { x: number; y: number; z: number }
+    right_elbow: { x: number; y: number; z: number }
+    right_wrist: { x: number; y: number; z: number }
+  }
+}
+
+interface ArmFingersResult {
+  status: string
+  landmarks: Array<Array<{ x: number; y: number; z: number }>>
+}
+
+interface EyesResult {
+  status: string
+  landmarks: Array<Array<{ x: number; y: number; z: number }>>
+}
+
+interface PeopleResult {
+  status: string
+  count: number
+  landmarks: Array<{ x: number; y: number; z: number }>
+}
+
+type DetectionResult = ArmResult | ArmFingersResult | EyesResult | PeopleResult | ErrorResult
+
 // Load MediaPipe scripts dynamically
+const handsFailed = ref(false)
+
 onMounted(() => {
   const loadScript = (src: string) => {
     return new Promise((resolve, reject) => {
@@ -102,7 +140,10 @@ onMounted(() => {
 
   Promise.all([
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.min.js'),
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.6/hands.min.js').catch(() => {
+      handsFailed.value = true
+      console.error('Failed to load MediaPipe Hands script')
+    }),
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js')
   ]).catch(err => {
     console.error('Failed to load MediaPipe scripts:', err)
@@ -115,7 +156,7 @@ const videoElement = ref<HTMLVideoElement | null>(null)
 const canvasElement = ref<HTMLCanvasElement | null>(null)
 const isCameraActive = ref(false)
 const errorMessage = ref('')
-const result = ref(null)
+const result = ref<DetectionResult | null>(null)
 const activeDetection = ref<string | null>(null)
 const mode = ref<'camera' | 'upload'>('camera')
 const uploadedImage = ref<string | null>(null)
@@ -205,16 +246,24 @@ const startDetection = (endpoint: string) => {
       minTrackingConfidence: 0.5
     })
     pose.onResults((results: any) => drawPoseResults(endpoint, results))
-  } else if (endpoint === 'arm-fingers') {
-    hands = new window.Hands({
-      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
-    })
-    hands.setOptions({
-      maxNumHands: 2,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    })
-    hands.onResults((results: any) => drawHandsResults(results))
+  } else if (endpoint === 'arm-fingers' && !handsFailed.value) {
+    try {
+      hands = new window.Hands({
+        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.6/${file}`
+      })
+      hands.setOptions({
+        maxNumHands: 2,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      })
+      hands.onResults((results: any) => drawHandsResults(results))
+    } catch (err) {
+      console.error('Failed to initialize Hands detection:', err)
+      handsFailed.value = true
+      errorMessage.value = 'Hands detection failed. Please try another detection type.'
+      activeDetection.value = null
+      return
+    }
   } else if (endpoint === 'eyes') {
     faceMesh = new window.FaceMesh({
       locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`
@@ -226,14 +275,23 @@ const startDetection = (endpoint: string) => {
       minTrackingConfidence: 0.5
     })
     faceMesh.onResults((results: any) => drawFaceMeshResults(results))
+  } else {
+    return // Skip if hands detection failed and endpoint is arm-fingers
   }
 
   // Start processing video frames
   const processFrame = async () => {
     if (!videoElement.value || !isCameraActive.value) return
-    if (pose) await pose.send({ image: videoElement.value })
-    if (hands) await hands.send({ image: videoElement.value })
-    if (faceMesh) await faceMesh.send({ image: videoElement.value })
+    try {
+      if (pose) await pose.send({ image: videoElement.value })
+      if (hands && !handsFailed.value) await hands.send({ image: videoElement.value })
+      if (faceMesh) await faceMesh.send({ image: videoElement.value })
+    } catch (err) {
+      console.error('Error processing frame:', err)
+      errorMessage.value = 'Error processing video frame. Please try again.'
+      stopDetection()
+      return
+    }
     rafId = requestAnimationFrame(processFrame)
   }
 

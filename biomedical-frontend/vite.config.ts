@@ -33,6 +33,17 @@ export default defineConfig({
         '@mediapipe/face_mesh',
         '@mediapipe/face_detection'
       ]
-    }
+    },
+    commonjsOptions: {
+      include: [/node_modules/]
+    },
+    sourcemap: true,
+    terserOptions: {
+      compress: {
+        drop_console: false
+      }
+    },
+    target: 'esnext',
+    minify: 'esbuild',
   }
 })

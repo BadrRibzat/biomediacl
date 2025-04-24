@@ -10,3 +10,4 @@ biomedical-backend/*.pyc
 biomedical-frontend/node_modules/
 biomedical-frontend/dist/
 biomedical-frontend/.vite/
+node_modules/ dist/ .vercel/

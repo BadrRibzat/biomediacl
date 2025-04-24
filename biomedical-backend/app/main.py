@@ -12,16 +12,80 @@ from .people_counting import detect_people
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from collections import deque
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-app = FastAPI(
+# Initialize Flask app
+flask_app = Flask(__name__)
+
+# Enable CORS for Flask with specific origins
+CORS(flask_app, resources={
+    r"/flask/detect/*": {
+        "origins": [
+            "http://localhost:8080",
+            "https://biomedical-frontend.vercel.app"
+        ],
+        "methods": ["POST"],
+        "allow_headers": ["*"]
+    }
+})
+
+# Flask endpoint
+@flask_app.route('/flask/detect/<endpoint>', methods=['POST'])
+def flask_detect(endpoint):
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    try:
+        # Read image file
+        contents = file.read()
+        image = Image.open(BytesIO(contents)).convert("RGB")
+        image_np = np.array(image)
+        image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+        
+        # Process based on endpoint
+        if endpoint == "arm":
+            result = detect_arm(image_bgr)
+        elif endpoint == "arm-fingers":
+            result = detect_arm_fingers(image_bgr)
+        elif endpoint == "eyes":
+            result = detect_eyes(image_bgr)
+        elif endpoint == "head":
+            result = detect_head(image_bgr)
+        elif endpoint == "people":
+            result = detect_people(image_bgr)
+        else:
+            return jsonify({'error': 'Invalid endpoint'}), 400
+            
+        return jsonify({
+            'status': 'success',
+            'result': result
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Initialize FastAPI app
+fastapi_app = FastAPI(
     title="Biomedical Detection API",
     description="API for real-time biomedical object detection, including arms, hands, eyes, heads, and people counting.",
     version="1.0.0"
 )
 
-app.add_middleware(
+# CORS for FastAPI
+origins = [
+    "http://localhost:8080",
+    "http://localhost:5173",
+    "https://biomedical-frontend.vercel.app"
+]
+
+fastapi_app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://biomedical-frontend.vercel.app"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,11 +94,9 @@ app.add_middleware(
 # In-memory queue for processing detection tasks
 detection_queue = deque()
 queue_lock = asyncio.Lock()
-
-# Store previous landmarks for people counting (simplified for single image)
 previous_landmarks = None
 
-@app.get("/")
+@fastapi_app.get("/")
 async def root():
     """Root endpoint for the Biomedical Detection API."""
     return {"message": "Welcome to the Biomedical Detection API"}
@@ -69,15 +131,15 @@ async def process_queue():
                 await asyncio.sleep(0.1)
                 continue
             endpoint, image, future = detection_queue.popleft()
+        
         try:
             result = await process_detection_task(endpoint, image)
             future.set_result(result)
         except Exception as e:
             future.set_exception(HTTPException(status_code=500, detail=f"Error processing image: {str(e)}"))
-        await asyncio.sleep(0.1)  # Small delay to prevent tight loop
+        await asyncio.sleep(0.1)
 
-# Start the queue processing task when the app starts
-@app.on_event("startup")
+@fastapi_app.on_event("startup")
 async def startup_event():
     asyncio.create_task(process_queue())
 
@@ -88,50 +150,26 @@ async def enqueue_detection(endpoint: str, image: np.ndarray):
         detection_queue.append((endpoint, image, future))
     return await future
 
-@app.post("/detect/arm")
-async def detect_arm_endpoint(file: UploadFile = File(...)):
+@fastapi_app.post("/detect/{endpoint}")
+async def fastapi_detect(endpoint: str, file: UploadFile = File(...)):
     """
-    Detect arm landmarks in an uploaded image using MediaPipe Pose.
+    Unified detection endpoint for FastAPI that handles all detection types.
     """
-    image = await process_image(file)
-    result = await enqueue_detection("arm", image)
-    return JSONResponse(status_code=200, content=result)
-
-@app.post("/detect/arm-fingers")
-async def detect_arm_fingers_endpoint(file: UploadFile = File(...)):
-    """
-    Detect hand and finger landmarks in an uploaded image using MediaPipe Hands.
-    """
-    image = await process_image(file)
-    result = await enqueue_detection("arm-fingers", image)
-    return JSONResponse(status_code=200, content=result)
-
-@app.post("/detect/eyes")
-async def detect_eyes_endpoint(file: UploadFile = File(...)):
-    """
-    Detect eye landmarks in an uploaded image using MediaPipe Face Mesh.
-    """
-    image = await process_image(file)
-    result = await enqueue_detection("eyes", image)
-    return JSONResponse(status_code=200, content=result)
-
-@app.post("/detect/head")
-async def detect_head_endpoint(file: UploadFile = File(...)):
-    """
-    Detect head (face) bounding boxes in an uploaded image using MediaPipe Face Detection.
-    """
-    image = await process_image(file)
-    result = await enqueue_detection("head", image)
-    return JSONResponse(status_code=200, content=result)
-
-@app.post("/detect/people")
-async def detect_people_endpoint(file: UploadFile = File(...)):
-    """
-    Detect and count people in an uploaded image using MediaPipe Pose.
-    """
-    image = await process_image(file)
-    result = await enqueue_detection("people", image)
-    return JSONResponse(status_code=200, content=result)
+    try:
+        # Process the uploaded image
+        contents = await file.read()
+        image = Image.open(BytesIO(contents)).convert("RGB")
+        image_np = np.array(image)
+        image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+        
+        # Enqueue the detection task
+        result = await enqueue_detection(endpoint, image_bgr)
+        return JSONResponse(status_code=200, content=result)
+        
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
 async def process_image(file: UploadFile) -> np.ndarray:
     """
