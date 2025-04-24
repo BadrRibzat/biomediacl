@@ -126,26 +126,38 @@ type DetectionResult = ArmResult | ArmFingersResult | EyesResult | PeopleResult 
 
 // Load MediaPipe scripts dynamically
 const handsFailed = ref(false)
+const errorMessage = ref('')
 
 onMounted(() => {
-  const loadScript = (src: string) => {
+  const loadScript = (src: string, fallbackSrc?: string) => {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script')
       script.src = src
       script.onload = resolve
-      script.onerror = reject
+      script.onerror = () => {
+        if (fallbackSrc) {
+          console.warn(`Failed to load ${src}, trying fallback: ${fallbackSrc}`)
+          const fallbackScript = document.createElement('script')
+          fallbackScript.src = fallbackSrc
+          fallbackScript.onload = resolve
+          fallbackScript.onerror = reject
+          document.head.appendChild(fallbackScript)
+        } else {
+          reject(new Error(`Failed to load script: ${src}`))
+        }
+      }
       document.head.appendChild(script)
     })
   }
 
-Promise.all([
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.5/hands.min.js').catch(() => {
+  Promise.all([
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js', '/mediapipe/pose.min.js'),
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.5/hands.min.js', '/mediapipe/hands.min.js').catch(() => {
       handsFailed.value = true
       errorMessage.value = 'Failed to load hand detection library. Please check your internet connection or try again later.'
       console.error('Failed to load MediaPipe Hands script')
     }),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js')
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.5/face_mesh.min.js', '/mediapipe/face_mesh.min.js')
   ]).catch(err => {
     console.error('Failed to load MediaPipe scripts:', err)
     errorMessage.value = 'Failed to load detection libraries. Please check your internet connection.'
@@ -156,7 +168,6 @@ const store = useDetectionStore()
 const videoElement = ref<HTMLVideoElement | null>(null)
 const canvasElement = ref<HTMLCanvasElement | null>(null)
 const isCameraActive = ref(false)
-const errorMessage = ref('')
 const result = ref<DetectionResult | null>(null)
 const activeDetection = ref<string | null>(null)
 const mode = ref<'camera' | 'upload'>('camera')
@@ -267,7 +278,7 @@ const startDetection = (endpoint: string) => {
     }
   } else if (endpoint === 'eyes') {
     faceMesh = new window.FaceMesh({
-      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`
+      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.5/${file}`
     })
     faceMesh.setOptions({
       maxNumFaces: 1,
