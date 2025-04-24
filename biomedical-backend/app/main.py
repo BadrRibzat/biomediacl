@@ -12,65 +12,9 @@ from .people_counting import detect_people
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 from collections import deque
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-
-# Initialize Flask app
-flask_app = Flask(__name__)
-
-# Enable CORS for Flask with specific origins
-CORS(flask_app, resources={
-    r"/flask/detect/*": {
-        "origins": [
-            "http://localhost:8080",
-            "https://biomedical-frontend.vercel.app"
-        ],
-        "methods": ["POST"],
-        "allow_headers": ["*"]
-    }
-})
-
-# Flask endpoint
-@flask_app.route('/flask/detect/<endpoint>', methods=['POST'])
-def flask_detect(endpoint):
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    try:
-        # Read image file
-        contents = file.read()
-        image = Image.open(BytesIO(contents)).convert("RGB")
-        image_np = np.array(image)
-        image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-        
-        # Process based on endpoint
-        if endpoint == "arm":
-            result = detect_arm(image_bgr)
-        elif endpoint == "arm-fingers":
-            result = detect_arm_fingers(image_bgr)
-        elif endpoint == "eyes":
-            result = detect_eyes(image_bgr)
-        elif endpoint == "head":
-            result = detect_head(image_bgr)
-        elif endpoint == "people":
-            result = detect_people(image_bgr)
-        else:
-            return jsonify({'error': 'Invalid endpoint'}), 400
-            
-        return jsonify({
-            'status': 'success',
-            'result': result
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # Initialize FastAPI app
-fastapi_app = FastAPI(
+app = FastAPI(
     title="Biomedical Detection API",
     description="API for real-time biomedical object detection, including arms, hands, eyes, heads, and people counting.",
     version="1.0.0"
@@ -80,10 +24,12 @@ fastapi_app = FastAPI(
 origins = [
     "http://localhost:8080",
     "http://localhost:5173",
-    "https://biomedical-frontend.vercel.app"
+    "https://biomedical-frontend.vercel.app",
+    "https://biomedical-frontend-3ci0ch4vj-badr-ribzat-project.vercel.app",
+    "https://*.vercel.app"
 ]
 
-fastapi_app.add_middleware(
+app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
@@ -96,7 +42,7 @@ detection_queue = deque()
 queue_lock = asyncio.Lock()
 previous_landmarks = None
 
-@fastapi_app.get("/")
+@app.get("/")
 async def root():
     """Root endpoint for the Biomedical Detection API."""
     return {"message": "Welcome to the Biomedical Detection API"}
@@ -139,7 +85,7 @@ async def process_queue():
             future.set_exception(HTTPException(status_code=500, detail=f"Error processing image: {str(e)}"))
         await asyncio.sleep(0.1)
 
-@fastapi_app.on_event("startup")
+@app.on_event("startup")
 async def startup_event():
     asyncio.create_task(process_queue())
 
@@ -150,10 +96,10 @@ async def enqueue_detection(endpoint: str, image: np.ndarray):
         detection_queue.append((endpoint, image, future))
     return await future
 
-@fastapi_app.post("/detect/{endpoint}")
-async def fastapi_detect(endpoint: str, file: UploadFile = File(...)):
+@app.post("/detect/{endpoint}")
+async def detect(endpoint: str, file: UploadFile = File(...)):
     """
-    Unified detection endpoint for FastAPI that handles all detection types.
+    Unified detection endpoint that handles all detection types.
     """
     try:
         # Process the uploaded image
