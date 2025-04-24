@@ -7,3 +7,6 @@ Dockerfile.local
 biomedical-backend/venv/
 biomedical-backend/__pycache__/
 biomedical-backend/*.pyc
+biomedical-frontend/node_modules/
+biomedical-frontend/dist/
+biomedical-frontend/.vite/

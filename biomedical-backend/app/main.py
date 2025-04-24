@@ -9,11 +9,21 @@ from .arm_fingers_detection import detect_arm_fingers
 from .eyes_detection import detect_eyes
 from .head_detection import detect_head
 from .people_counting import detect_people
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI(
     title="Biomedical Detection API",
     description="API for real-time biomedical object detection, including arms, hands, eyes, heads, and people counting.",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "https://biomedical-frontend.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Store previous landmarks for people counting (simplified for single image)
