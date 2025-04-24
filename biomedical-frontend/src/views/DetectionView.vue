@@ -39,8 +39,12 @@
           {{ activeDetection === 'arm-fingers' ? 'Stop Arm-Fingers Detection' : 'Detect Arm-Fingers' }}
           <span v-if="handsFailed" class="text-red-500 text-sm ml-2"> (Failed to load)</span>
         </button>
-        <button @click="toggleDetection('eyes')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
+        <button @click="toggleDetection('eyes')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive || faceMeshFailed">
           {{ activeDetection === 'eyes' ? 'Stop Eyes Detection' : 'Detect Eyes' }}
+          <span v-if="faceMeshFailed" class="text-red-500 text-sm ml-2"> (Failed to load)</span>
+        </button>
+        <button @click="toggleDetection('head')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
+          {{ activeDetection === 'head' ? 'Stop Head Detection' : 'Detect Head' }}
         </button>
         <button @click="toggleDetection('people')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
           {{ activeDetection === 'people' ? 'Stop People Detection' : 'Detect People' }}
@@ -66,6 +70,9 @@
           </button>
           <button @click="detectUploadedImage('eyes')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!uploadedImage">
             Detect Eyes
+          </button>
+          <button @click="detectUploadedImage('head')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!uploadedImage">
+            Detect Head
           </button>
           <button @click="detectUploadedImage('people')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!uploadedImage">
             Detect People
@@ -116,16 +123,28 @@ interface EyesResult {
   landmarks: Array<Array<{ x: number; y: number; z: number }>>
 }
 
+interface HeadResult {
+  status: string
+  faces: Array<{
+    xmin: number
+    ymin: number
+    width: number
+    height: number
+    confidence: number
+  }>
+}
+
 interface PeopleResult {
   status: string
   count: number
   landmarks: Array<{ x: number; y: number; z: number }>
 }
 
-type DetectionResult = ArmResult | ArmFingersResult | EyesResult | PeopleResult | ErrorResult
+type DetectionResult = ArmResult | ArmFingersResult | EyesResult | HeadResult | PeopleResult | ErrorResult
 
 // Load MediaPipe scripts dynamically
 const handsFailed = ref(false)
+const faceMeshFailed = ref(false)
 const errorMessage = ref('')
 
 onMounted(() => {
@@ -152,12 +171,16 @@ onMounted(() => {
 
   Promise.all([
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js', '/mediapipe/pose.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.5/hands.min.js', '/mediapipe/hands.min.js').catch(() => {
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.min.js', '/mediapipe/hands.min.js').catch(() => {
       handsFailed.value = true
       errorMessage.value = 'Failed to load hand detection library. Please check your internet connection or try again later.'
       console.error('Failed to load MediaPipe Hands script')
     }),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.5/face_mesh.min.js', '/mediapipe/face_mesh.min.js')
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js', '/mediapipe/face_mesh.min.js').catch(() => {
+      faceMeshFailed.value = true
+      errorMessage.value = 'Failed to load face mesh library for eye detection. Please check your internet connection or try again later.'
+      console.error('Failed to load MediaPipe Face Mesh script')
+    })
   ]).catch(err => {
     console.error('Failed to load MediaPipe scripts:', err)
     errorMessage.value = 'Failed to load detection libraries. Please check your internet connection.'
@@ -261,7 +284,7 @@ const startDetection = (endpoint: string) => {
   } else if (endpoint === 'arm-fingers' && !handsFailed.value) {
     try {
       hands = new window.Hands({
-        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.5/${file}`
+        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
       })
       hands.setOptions({
         maxNumHands: 2,
@@ -276,9 +299,9 @@ const startDetection = (endpoint: string) => {
       activeDetection.value = null
       return
     }
-  } else if (endpoint === 'eyes') {
+  } else if (endpoint === 'eyes' && !faceMeshFailed.value) {
     faceMesh = new window.FaceMesh({
-      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.5/${file}`
+      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`
     })
     faceMesh.setOptions({
       maxNumFaces: 1,
@@ -287,8 +310,11 @@ const startDetection = (endpoint: string) => {
       minTrackingConfidence: 0.5
     })
     faceMesh.onResults((results: any) => drawFaceMeshResults(results))
+  } else if (endpoint === 'head') {
+    // Head detection doesn't require MediaPipe on the frontend since it's handled by the backend
+    // We'll just fetch JSON results
   } else {
-    return // Skip if hands detection failed and endpoint is arm-fingers
+    return // Skip if hands or face mesh detection failed for their respective endpoints
   }
 
   // Start processing video frames
@@ -297,7 +323,7 @@ const startDetection = (endpoint: string) => {
     try {
       if (pose) await pose.send({ image: videoElement.value })
       if (hands && !handsFailed.value) await hands.send({ image: videoElement.value })
-      if (faceMesh) await faceMesh.send({ image: videoElement.value })
+      if (faceMesh && !faceMeshFailed.value) await faceMesh.send({ image: videoElement.value })
     } catch (err) {
       console.error('Error processing frame:', err)
       errorMessage.value = 'Error processing video frame. Please try again.'
