@@ -1,34 +1,82 @@
 <template>
   <div class="container mx-auto p-4">
     <h1 class="text-3xl font-bold mb-4">Detection</h1>
-    <div class="mb-4 flex flex-wrap gap-2">
-      <button @click="startCamera" class="bg-green-500 hover:bg-green-700 text-white p-2 rounded" :disabled="isCameraActive">
-        Start Camera
-      </button>
-      <button @click="stopCamera" class="bg-red-500 hover:bg-red-700 text-white p-2 rounded" :disabled="!isCameraActive">
-        Stop Camera
-      </button>
-      <button @click="toggleDetection('arm')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
-        {{ activeDetection === 'arm' ? 'Stop Arm Detection' : 'Detect Arm' }}
-      </button>
-      <button @click="toggleDetection('arm-fingers')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
-        {{ activeDetection === 'arm-fingers' ? 'Stop Arm-Fingers Detection' : 'Detect Arm-Fingers' }}
-      </button>
-      <button @click="toggleDetection('eyes')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
-        {{ activeDetection === 'eyes' ? 'Stop Eyes Detection' : 'Detect Eyes' }}
-      </button>
-      <button @click="toggleDetection('head')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
-        {{ activeDetection === 'head' ? 'Stop Head Detection' : 'Detect Head' }}
-      </button>
-      <button @click="toggleDetection('people')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
-        {{ activeDetection === 'people' ? 'Stop People Detection' : 'Detect People' }}
-      </button>
+
+    <!-- Mode Selection -->
+    <div class="mb-4">
+      <h2 class="text-xl font-semibold mb-2">Select Detection Mode</h2>
+      <div class="flex gap-2">
+        <button
+          @click="setMode('camera')"
+          class="p-2 rounded"
+          :class="mode === 'camera' ? 'bg-blue-500 text-white' : 'bg-gray-200'"
+        >
+          Use Camera
+        </button>
+        <button
+          @click="setMode('upload')"
+          class="p-2 rounded"
+          :class="mode === 'upload' ? 'bg-blue-500 text-white' : 'bg-gray-200'"
+        >
+          Upload Image
+        </button>
+      </div>
     </div>
-    <div class="mb-4 relative">
-      <video ref="videoElement" autoplay class="w-full max-w-md border rounded" v-show="isCameraActive"></video>
-      <canvas ref="canvasElement" class="absolute top-0 left-0 w-full max-w-md" v-show="isCameraActive"></canvas>
-      <p v-if="errorMessage" class="text-red-500 mt-2">{{ errorMessage }}</p>
+
+    <!-- Camera Mode -->
+    <div v-if="mode === 'camera'">
+      <div class="mb-4 flex flex-wrap gap-2">
+        <button @click="startCamera" class="bg-green-500 hover:bg-green-700 text-white p-2 rounded" :disabled="isCameraActive">
+          Start Camera
+        </button>
+        <button @click="stopCamera" class="bg-red-500 hover:bg-red-700 text-white p-2 rounded" :disabled="!isCameraActive">
+          Stop Camera
+        </button>
+        <button @click="toggleDetection('arm')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
+          {{ activeDetection === 'arm' ? 'Stop Arm Detection' : 'Detect Arm' }}
+        </button>
+        <button @click="toggleDetection('arm-fingers')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
+          {{ activeDetection === 'arm-fingers' ? 'Stop Arm-Fingers Detection' : 'Detect Arm-Fingers' }}
+        </button>
+        <button @click="toggleDetection('eyes')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
+          {{ activeDetection === 'eyes' ? 'Stop Eyes Detection' : 'Detect Eyes' }}
+        </button>
+        <button @click="toggleDetection('people')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!isCameraActive">
+          {{ activeDetection === 'people' ? 'Stop People Detection' : 'Detect People' }}
+        </button>
+      </div>
+      <div class="mb-4 relative">
+        <video ref="videoElement" autoplay class="w-full max-w-md border rounded" v-show="isCameraActive"></video>
+        <canvas ref="canvasElement" class="absolute top-0 left-0 w-full max-w-md" v-show="isCameraActive"></canvas>
+        <p v-if="errorMessage" class="text-red-500 mt-2">{{ errorMessage }}</p>
+      </div>
     </div>
+
+    <!-- Upload Mode -->
+    <div v-if="mode === 'upload'">
+      <div class="mb-4">
+        <input type="file" @change="handleImageUpload" accept="image/*" class="mb-2" />
+        <div class="flex flex-wrap gap-2">
+          <button @click="detectUploadedImage('arm')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!uploadedImage">
+            Detect Arm
+          </button>
+          <button @click="detectUploadedImage('arm-fingers')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!uploadedImage">
+            Detect Arm-Fingers
+          </button>
+          <button @click="detectUploadedImage('eyes')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!uploadedImage">
+            Detect Eyes
+          </button>
+          <button @click="detectUploadedImage('people')" class="bg-blue-500 hover:bg-blue-700 text-white p-2 rounded" :disabled="!uploadedImage">
+            Detect People
+          </button>
+        </div>
+      </div>
+      <div class="mb-4" v-if="uploadedImage">
+        <img :src="uploadedImage" class="w-full max-w-md border rounded" alt="Uploaded Image" />
+      </div>
+    </div>
+
+    <!-- Results -->
     <div v-if="result" class="mt-4">
       <h2 class="text-xl font-semibold">Result</h2>
       <pre class="bg-gray-100 p-4 rounded">{{ result }}</pre>
@@ -55,8 +103,7 @@ onMounted(() => {
   Promise.all([
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js'),
     loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4/face_detection.min.js')
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js')
   ]).catch(err => {
     console.error('Failed to load MediaPipe scripts:', err)
     errorMessage.value = 'Failed to load detection libraries. Please check your internet connection.'
@@ -70,11 +117,12 @@ const isCameraActive = ref(false)
 const errorMessage = ref('')
 const result = ref(null)
 const activeDetection = ref<string | null>(null)
+const mode = ref<'camera' | 'upload'>('camera')
+const uploadedImage = ref<string | null>(null)
 let stream: MediaStream | null = null
 let pose: any | null = null
 let hands: any | null = null
 let faceMesh: any | null = null
-let faceDetection: any | null = null
 let rafId: number | null = null
 let jsonInterval: number | null = null
 
@@ -84,10 +132,18 @@ declare global {
     Pose: any
     Hands: any
     FaceMesh: any
-    FaceDetection: any
   }
 }
 
+const setMode = (newMode: 'camera' | 'upload') => {
+  mode.value = newMode
+  stopCamera()
+  uploadedImage.value = null
+  result.value = null
+  errorMessage.value = ''
+}
+
+// Camera Mode Functions
 const startCamera = async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: true })
@@ -121,7 +177,6 @@ const stopCamera = () => {
   if (pose) pose.close()
   if (hands) hands.close()
   if (faceMesh) faceMesh.close()
-  if (faceDetection) faceDetection.close()
 }
 
 const toggleDetection = (endpoint: string) => {
@@ -171,14 +226,6 @@ const startDetection = (endpoint: string) => {
       minTrackingConfidence: 0.5
     })
     faceMesh.onResults((results: any) => drawFaceMeshResults(results))
-  } else if (endpoint === 'head') {
-    faceDetection = new window.FaceDetection({
-      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4/${file}`
-    })
-    faceDetection.setOptions({
-      minDetectionConfidence: 0.5
-    })
-    faceDetection.onResults((results: any) => drawFaceDetectionResults(results))
   }
 
   // Start processing video frames
@@ -187,7 +234,6 @@ const startDetection = (endpoint: string) => {
     if (pose) await pose.send({ image: videoElement.value })
     if (hands) await hands.send({ image: videoElement.value })
     if (faceMesh) await faceMesh.send({ image: videoElement.value })
-    if (faceDetection) await faceDetection.send({ image: videoElement.value })
     rafId = requestAnimationFrame(processFrame)
   }
 
@@ -219,10 +265,6 @@ const stopDetection = () => {
   if (faceMesh) {
     faceMesh.close()
     faceMesh = null
-  }
-  if (faceDetection) {
-    faceDetection.close()
-    faceDetection = null
   }
 }
 
@@ -312,7 +354,6 @@ const drawPoseResults = (endpoint: string, results: any) => {
       ctx.arc(lm2.x, lm2.y, 3, 0, 2 * Math.PI)
       ctx.fill()
     })
-    // People count will be updated via JSON
   }
 }
 
@@ -366,7 +407,7 @@ const drawFaceMeshResults = (results: any) => {
   ctx.clearRect(0, 0, canvasElement.value.width, canvasElement.value.height)
   ctx.fillStyle = 'red'
 
-  if (!results.multiFaceLandmarks) return
+  if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return
 
   const width = canvasElement.value.width
   const height = canvasElement.value.height
@@ -375,6 +416,7 @@ const drawFaceMeshResults = (results: any) => {
     const irisIndices = [...Array(6).keys()].map(i => 468 + i).concat([...Array(6).keys()].map(i => 474 + i))
     irisIndices.forEach(idx => {
       const lm = landmarks[idx]
+      if (!lm) return // Skip if landmark is undefined
       const x = lm.x * width
       const y = lm.y * height
       ctx.beginPath()
@@ -384,40 +426,44 @@ const drawFaceMeshResults = (results: any) => {
   })
 }
 
-const drawFaceDetectionResults = (results: any) => {
-  if (!canvasElement.value) return
-  const ctx = canvasElement.value.getContext('2d')
-  if (!ctx) return
-
-  ctx.clearRect(0, 0, canvasElement.value.width, canvasElement.value.height)
-  ctx.strokeStyle = 'red'
-  ctx.fillStyle = 'red'
-  ctx.lineWidth = 2
-  ctx.font = '16px Arial'
-
-  if (!results.detections) return
-
-  const width = canvasElement.value.width
-  const height = canvasElement.value.height
-
-  results.detections.forEach((detection: any) => {
-    const bbox = detection.boundingBox
-    const x = bbox.originX * width
-    const y = bbox.originY * height
-    const w = bbox.width * width
-    const h = bbox.height * height
-    ctx.beginPath()
-    ctx.rect(x, y, w, h)
-    ctx.stroke()
-    // Confidence will be updated via JSON
-  })
-}
-
 const clearCanvas = () => {
   if (!canvasElement.value) return
   const ctx = canvasElement.value.getContext('2d')
   if (ctx) {
     ctx.clearRect(0, 0, canvasElement.value.width, canvasElement.value.height)
+  }
+}
+
+// Upload Mode Functions
+const handleImageUpload = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files[0]) {
+    const file = input.files[0]
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      uploadedImage.value = e.target?.result as string
+      store.setFile(file)
+      result.value = null
+      errorMessage.value = ''
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+const detectUploadedImage = async (endpoint: string) => {
+  if (!store.file) {
+    errorMessage.value = 'Please upload an image first.'
+    return
+  }
+
+  try {
+    const response = await store.uploadImage(endpoint)
+    result.value = response
+    errorMessage.value = ''
+  } catch (error) {
+    console.error('Error detecting image:', error)
+    result.value = { error: 'Failed to detect image' }
+    errorMessage.value = 'Detection failed. Check console for details.'
   }
 }
 

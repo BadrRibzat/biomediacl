@@ -32,6 +32,6 @@ primary_region = 'iad'
     handlers = ['tls', 'http']
 
 [[vm]]
-  memory = '1gb'
+  memory = '2gb'  # Increased memory to 2GB
   cpu_kind = 'shared'
   cpus = 1
