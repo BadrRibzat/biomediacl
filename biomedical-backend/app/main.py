@@ -17,7 +17,13 @@ from collections import deque
 app = FastAPI(
     title="Biomedical Detection API",
     description="API for real-time biomedical object detection, including arms, hands, eyes, heads, and people counting.",
-    version="1.0.0"
+    version="1.0.0",
+    openapi_tags=[
+        {
+            "name": "detection",
+            "description": "Endpoints for various detection types (arm, arm-fingers, eyes, head, people)."
+        }
+    ]
 )
 
 # CORS for FastAPI
@@ -26,6 +32,7 @@ origins = [
     "http://localhost:5173",
     "https://biomedical-frontend.vercel.app",
     "https://biomedical-frontend-3ci0ch4vj-badr-ribzat-project.vercel.app",
+    "https://biomedical-frontend-r6wxrqdlx-badr-ribzat-project.vercel.app",
     "https://*.vercel.app"
 ]
 
@@ -42,7 +49,7 @@ detection_queue = deque()
 queue_lock = asyncio.Lock()
 previous_landmarks = None
 
-@app.get("/")
+@app.get("/", tags=["root"])
 async def root():
     """Root endpoint for the Biomedical Detection API."""
     return {"message": "Welcome to the Biomedical Detection API"}
@@ -96,10 +103,22 @@ async def enqueue_detection(endpoint: str, image: np.ndarray):
         detection_queue.append((endpoint, image, future))
     return await future
 
-@app.post("/detect/{endpoint}")
+@app.post("/detect/{endpoint}", tags=["detection"])
 async def detect(endpoint: str, file: UploadFile = File(...)):
     """
     Unified detection endpoint that handles all detection types.
+
+    Parameters:
+    - endpoint: The type of detection to perform. Possible values:
+        - `arm`: Detect arm landmarks (shoulder, elbow, wrist).
+        - `arm-fingers`: Detect hand and finger landmarks.
+        - `eyes`: Detect eye landmarks (iris).
+        - `head`: Detect head (face) bounding boxes.
+        - `people`: Count people in the image.
+    - file: The image file to process.
+
+    Returns:
+    - JSON response with detection results specific to the endpoint.
     """
     try:
         # Process the uploaded image
@@ -116,6 +135,21 @@ async def detect(endpoint: str, file: UploadFile = File(...)):
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
+
+# Customize OpenAPI schema to document possible endpoint values
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = app.openapi()
+    openapi_schema["paths"]["/detect/{endpoint}"]["post"]["parameters"][0]["schema"] = {
+        "type": "string",
+        "enum": ["arm", "arm-fingers", "eyes", "head", "people"],
+        "description": "The type of detection to perform."
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 async def process_image(file: UploadFile) -> np.ndarray:
     """
