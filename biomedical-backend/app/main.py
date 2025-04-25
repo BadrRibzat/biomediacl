@@ -140,12 +140,16 @@ async def detect(endpoint: str, file: UploadFile = File(...)):
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    openapi_schema = app.openapi()
-    openapi_schema["paths"]["/detect/{endpoint}"]["post"]["parameters"][0]["schema"] = {
-        "type": "string",
-        "enum": ["arm", "arm-fingers", "eyes", "head", "people"],
-        "description": "The type of detection to perform."
-    }
+    # Call the parent class's openapi method to avoid recursion
+    openapi_schema = super(FastAPI, app).openapi()
+    # Ensure the path exists before modifying
+    path = openapi_schema["paths"].get("/detect/{endpoint}", {}).get("post", {})
+    if path and "parameters" in path and len(path["parameters"]) > 0:
+        path["parameters"][0]["schema"] = {
+            "type": "string",
+            "enum": ["arm", "arm-fingers", "eyes", "head", "people"],
+            "description": "The type of detection to perform."
+        }
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
