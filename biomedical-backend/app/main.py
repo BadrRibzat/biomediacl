@@ -36,7 +36,8 @@ origins = [
     "https://biomedical-frontend.vercel.app",
     "https://biomedical-frontend-3ci0ch4vj-badr-ribzat-project.vercel.app",
     "https://biomedical-frontend-r6wxrqdlx-badr-ribzat-project.vercel.app",
-    "https://biomedical-frontend-78ygwsva4-badr-ribzat-project.vercel.app",  # Added new frontend URL
+    "https://biomedical-frontend-78ygwsva4-badr-ribzat-project.vercel.app",
+    "https://biomedical-frontend-bghcjaxnl-badr-ribzat-project.vercel.app",  # Added new frontend URL
 ]
 
 app.add_middleware(
@@ -182,4 +183,4 @@ async def process_image(file: UploadFile) -> np.ndarray:
     contents = await file.read()
     image = Image.open(BytesIO(contents)).convert("RGB")
     image_np = np.array(image)
-    return cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+    return cv2.cvtColor(image_np, CV2.COLOR_RGB2BGR)
