@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom base styles */
+@layer base {
+  body {
+    @apply font-sans text-gray-900 bg-gray-50 antialiased;
+  }
+
+  /* Smooth transitions for Vue router */
+  .router-view {
+    @apply transition-opacity duration-300 ease-in-out;
+  }
+  .router-view-enter-from,
+  .router-view-leave-to {
+    @apply opacity-0;
+  }
+}
