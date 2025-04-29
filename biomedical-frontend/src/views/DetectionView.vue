@@ -224,9 +224,11 @@ const startCamera = async () => {
     // Enumerate devices to check for available cameras
     const devices = await navigator.mediaDevices.enumerateDevices()
     const videoDevices = devices.filter(device => device.kind === 'videoinput')
+    console.log('Available video devices:', videoDevices) // Debug: Log detected devices
+
     if (videoDevices.length === 0) {
-      errorMessage.value = 'No camera found on this device. Please use upload mode or connect a camera.'
-      return
+      console.warn('No video devices found. Attempting to access default camera.')
+      // Proceed to try getUserMedia even if no devices are enumerated
     }
 
     stream = await navigator.mediaDevices.getUserMedia({
@@ -241,6 +243,7 @@ const startCamera = async () => {
         canvasElement.value.width = videoElement.value.videoWidth
         canvasElement.value.height = videoElement.value.videoHeight
       }
+      console.log('Camera started successfully:', stream.getVideoTracks())
     }
   } catch (error: any) {
     console.error('Error accessing camera:', error)
@@ -248,6 +251,8 @@ const startCamera = async () => {
       errorMessage.value = 'Camera access denied. Please grant camera permissions in your browser settings.'
     } else if (error.name === 'NotFoundError') {
       errorMessage.value = 'No camera found. Please connect a camera or use upload mode.'
+    } else if (error.name === 'NotReadableError') {
+      errorMessage.value = 'Camera is in use by another application. Please close other apps and try again.'
     } else {
       errorMessage.value = `Failed to access camera: ${error.message}`
     }
