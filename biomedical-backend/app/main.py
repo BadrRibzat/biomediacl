@@ -25,8 +25,8 @@ app = FastAPI(
             "description": "Endpoints for various detection types (arm, arm-fingers, eyes, head, people)."
         }
     ],
-    docs_url="/docs",  # Explicitly enable Swagger UI
-    redoc_url="/redoc",  # Explicitly enable ReDoc
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # CORS configuration
@@ -36,7 +36,7 @@ origins = [
     "https://biomedical-frontend.vercel.app",
     "https://biomedical-frontend-3ci0ch4vj-badr-ribzat-project.vercel.app",
     "https://biomedical-frontend-r6wxrqdlx-badr-ribzat-project.vercel.app",
-    "https://*.vercel.app",
+    "https://biomedical-frontend-78ygwsva4-badr-ribzat-project.vercel.app",  # Added new frontend URL
 ]
 
 app.add_middleware(
@@ -45,6 +45,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # In-memory queue for processing detection tasks
@@ -159,7 +160,6 @@ def custom_openapi():
             routes=app.routes,
             tags=app.openapi_tags,
         )
-        # Ensure the endpoint parameter is correctly documented
         path = openapi_schema["paths"].get("/detect/{endpoint}", {}).get("post", {})
         if path and "parameters" in path and len(path["parameters"]) > 0:
             path["parameters"][0]["schema"] = {
