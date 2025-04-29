@@ -104,40 +104,35 @@ interface ErrorResult {
 interface ArmResult {
   status: string
   landmarks: {
-    left_shoulder: { x: number; y: number; z: number }
-    left_elbow: { x: number; y: number; z: number }
-    left_wrist: { x: number; y: number; z: number }
-    right_shoulder: { x: number; y: number; z: number }
-    right_elbow: { x: number; y: number; z: number }
-    right_wrist: { x: number; y: number; z: number }
-  }
+    name: string
+    x: number
+    y: number
+    z: number
+  }[]
 }
 
 interface ArmFingersResult {
   status: string
-  landmarks: Array<Array<{ x: number; y: number; z: number }>>
+  hands: {
+    label: string
+    landmarks: { index: number; x: number; y: number; z: number }[]
+  }[]
 }
 
 interface EyesResult {
   status: string
-  landmarks: Array<Array<{ x: number; y: number; z: number }>>
+  landmarks: { name: string; x: number; y: number; z: number }[]
 }
 
 interface HeadResult {
   status: string
-  faces: Array<{
-    xmin: number
-    ymin: number
-    width: number
-    height: number
-    confidence: number
-  }>
+  faces: { xmin: number; ymin: number; width: number; height: number; confidence: number }[]
 }
 
 interface PeopleResult {
   status: string
   count: number
-  landmarks: Array<{ x: number; y: number; z: number }>
+  landmarks: { x: number; y: number; z: number }[]
 }
 
 type DetectionResult = ArmResult | ArmFingersResult | EyesResult | HeadResult | PeopleResult | ErrorResult
@@ -148,42 +143,44 @@ const faceMeshFailed = ref(false)
 const errorMessage = ref('')
 
 onMounted(() => {
-  const loadScript = (src: string, fallbackSrc?: string) => {
+  const loadScript = (src: string, retryCount = 3, delay = 1000): Promise<void> => {
     return new Promise((resolve, reject) => {
-      const script = document.createElement('script')
-      script.src = src
-      script.onload = resolve
-      script.onerror = () => {
-        if (fallbackSrc) {
-          console.warn(`Failed to load ${src}, trying fallback: ${fallbackSrc}`)
-          const fallbackScript = document.createElement('script')
-          fallbackScript.src = fallbackSrc
-          fallbackScript.onload = resolve
-          fallbackScript.onerror = reject
-          document.head.appendChild(fallbackScript)
-        } else {
-          reject(new Error(`Failed to load script: ${src}`))
+      const attemptLoad = (attemptsLeft: number) => {
+        const script = document.createElement('script')
+        script.src = src
+        script.onload = () => resolve()
+        script.onerror = () => {
+          if (attemptsLeft > 0) {
+            console.warn(`Retrying to load script: ${src}, attempts left: ${attemptsLeft}`)
+            setTimeout(() => attemptLoad(attemptsLeft - 1), delay)
+          } else {
+            reject(new Error(`Failed to load script: ${src}`))
+          }
         }
+        document.head.appendChild(script)
       }
-      document.head.appendChild(script)
+      attemptLoad(retryCount)
     })
   }
 
   Promise.all([
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.min.js', '/mediapipe/pose.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.min.js', '/mediapipe/hands.min.js').catch(() => {
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.min.js'),
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js').catch(() => {
       handsFailed.value = true
-      errorMessage.value = 'Failed to load hand detection library. Please check your internet connection or try again later.'
+      errorMessage.value = 'Failed to load hand detection library. Arm-Fingers detection is disabled.'
       console.error('Failed to load MediaPipe Hands script')
     }),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js', '/mediapipe/face_mesh.min.js').catch(() => {
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.min.js').catch(() => {
       faceMeshFailed.value = true
-      errorMessage.value = 'Failed to load face mesh library for eye detection. Please check your internet connection or try again later.'
+      errorMessage.value = 'Failed to load face mesh library. Eye detection is disabled.'
       console.error('Failed to load MediaPipe Face Mesh script')
-    })
+    }),
+    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.min.js').catch(() => {
+      console.error('Failed to load MediaPipe Face Detection script')
+    }),
   ]).catch(err => {
     console.error('Failed to load MediaPipe scripts:', err)
-    errorMessage.value = 'Failed to load detection libraries. Please check your internet connection.'
+    errorMessage.value = 'Failed to load detection libraries. Some features may be unavailable.'
   })
 })
 
@@ -199,6 +196,7 @@ let stream: MediaStream | null = null
 let pose: any | null = null
 let hands: any | null = null
 let faceMesh: any | null = null
+let faceDetection: any | null = null
 let rafId: number | null = null
 let jsonInterval: number | null = null
 
@@ -208,6 +206,7 @@ declare global {
     Pose: any
     Hands: any
     FaceMesh: any
+    FaceDetection: any
   }
 }
 
@@ -222,9 +221,20 @@ const setMode = (newMode: 'camera' | 'upload') => {
 // Camera Mode Functions
 const startCamera = async () => {
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: true })
+    // Enumerate devices to check for available cameras
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    const videoDevices = devices.filter(device => device.kind === 'videoinput')
+    if (videoDevices.length === 0) {
+      errorMessage.value = 'No camera found on this device. Please use upload mode or connect a camera.'
+      return
+    }
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+    })
     if (videoElement.value) {
       videoElement.value.srcObject = stream
+      await videoElement.value.play()
       isCameraActive.value = true
       errorMessage.value = ''
       if (canvasElement.value) {
@@ -232,9 +242,15 @@ const startCamera = async () => {
         canvasElement.value.height = videoElement.value.videoHeight
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error accessing camera:', error)
-    errorMessage.value = 'Failed to access camera. Please grant permission or check device compatibility.'
+    if (error.name === 'NotAllowedError') {
+      errorMessage.value = 'Camera access denied. Please grant camera permissions in your browser settings.'
+    } else if (error.name === 'NotFoundError') {
+      errorMessage.value = 'No camera found. Please connect a camera or use upload mode.'
+    } else {
+      errorMessage.value = `Failed to access camera: ${error.message}`
+    }
   }
 }
 
@@ -253,6 +269,7 @@ const stopCamera = () => {
   if (pose) pose.close()
   if (hands) hands.close()
   if (faceMesh) faceMesh.close()
+  if (faceDetection) faceDetection.close()
 }
 
 const toggleDetection = (endpoint: string) => {
@@ -272,24 +289,31 @@ const startDetection = (endpoint: string) => {
 
   // Initialize MediaPipe detectors
   if (endpoint === 'arm' || endpoint === 'people') {
-    pose = new window.Pose({
-      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${file}`
-    })
-    pose.setOptions({
-      modelComplexity: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    })
-    pose.onResults((results: any) => drawPoseResults(endpoint, results))
+    try {
+      pose = new window.Pose({
+        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
+      })
+      pose.setOptions({
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      })
+      pose.onResults((results: any) => drawPoseResults(endpoint, results))
+    } catch (err) {
+      console.error('Failed to initialize Pose detection:', err)
+      errorMessage.value = 'Pose detection failed. Please try another detection type.'
+      activeDetection.value = null
+      return
+    }
   } else if (endpoint === 'arm-fingers' && !handsFailed.value) {
     try {
       hands = new window.Hands({
-        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${file}`
+        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`,
       })
       hands.setOptions({
         maxNumHands: 2,
         minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
+        minTrackingConfidence: 0.5,
       })
       hands.onResults((results: any) => drawHandsResults(results))
     } catch (err) {
@@ -300,19 +324,38 @@ const startDetection = (endpoint: string) => {
       return
     }
   } else if (endpoint === 'eyes' && !faceMeshFailed.value) {
-    faceMesh = new window.FaceMesh({
-      locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`
-    })
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    })
-    faceMesh.onResults((results: any) => drawFaceMeshResults(results))
+    try {
+      faceMesh = new window.FaceMesh({
+        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`,
+      })
+      faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      })
+      faceMesh.onResults((results: any) => drawFaceMeshResults(results))
+    } catch (err) {
+      console.error('Failed to initialize FaceMesh detection:', err)
+      faceMeshFailed.value = true
+      errorMessage.value = 'Face mesh detection failed. Please try another detection type.'
+      activeDetection.value = null
+      return
+    }
   } else if (endpoint === 'head') {
-    // Head detection doesn't require MediaPipe on the frontend since it's handled by the backend
-    // We'll just fetch JSON results
+    // Head detection is handled by the backend, but we can initialize FaceDetection for visualization
+    try {
+      faceDetection = new window.FaceDetection({
+        locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`,
+      })
+      faceDetection.setOptions({
+        minDetectionConfidence: 0.5,
+      })
+      faceDetection.onResults((results: any) => drawFaceDetectionResults(results))
+    } catch (err) {
+      console.error('Failed to initialize Face Detection:', err)
+      errorMessage.value = 'Head detection visualization failed. Results will still be available via JSON.'
+    }
   } else {
     return // Skip if hands or face mesh detection failed for their respective endpoints
   }
@@ -324,6 +367,7 @@ const startDetection = (endpoint: string) => {
       if (pose) await pose.send({ image: videoElement.value })
       if (hands && !handsFailed.value) await hands.send({ image: videoElement.value })
       if (faceMesh && !faceMeshFailed.value) await faceMesh.send({ image: videoElement.value })
+      if (faceDetection) await faceDetection.send({ image: videoElement.value })
     } catch (err) {
       console.error('Error processing frame:', err)
       errorMessage.value = 'Error processing video frame. Please try again.'
@@ -362,6 +406,10 @@ const stopDetection = () => {
     faceMesh.close()
     faceMesh = null
   }
+  if (faceDetection) {
+    faceDetection.close()
+    faceDetection = null
+  }
 }
 
 const fetchJsonResults = async (endpoint: string) => {
@@ -384,10 +432,10 @@ const fetchJsonResults = async (endpoint: string) => {
       const response = await store.uploadImage(endpoint)
       result.value = response
       errorMessage.value = ''
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching JSON:', error)
-      result.value = { error: 'Failed to fetch JSON results' }
-      errorMessage.value = 'JSON fetch failed. Check console for details.'
+      result.value = { error: `Failed to fetch JSON results: ${error.message}` }
+      errorMessage.value = 'JSON fetch failed. Check network or backend status.'
     }
   }, 'image/jpeg')
 }
@@ -410,7 +458,7 @@ const drawPoseResults = (endpoint: string, results: any) => {
   const landmarks = results.poseLandmarks.map((lm: any) => ({
     x: lm.x * width,
     y: lm.y * height,
-    z: lm.z
+    z: lm.z,
   }))
 
   if (endpoint === 'arm') {
@@ -436,8 +484,16 @@ const drawPoseResults = (endpoint: string, results: any) => {
     ctx.stroke()
   } else if (endpoint === 'people') {
     const connections = [
-      [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms
-      [23, 24], [11, 23], [12, 24], [23, 25], [24, 26], // Torso and legs
+      [11, 12],
+      [11, 13],
+      [13, 15],
+      [12, 14],
+      [14, 16], // Arms
+      [23, 24],
+      [11, 23],
+      [12, 24],
+      [23, 25],
+      [24, 26], // Torso and legs
     ]
     connections.forEach(([i, j]) => {
       const lm1 = landmarks[i]
@@ -472,7 +528,7 @@ const drawHandsResults = (results: any) => {
     const lm = landmarks.map((l: any) => ({
       x: l.x * width,
       y: l.y * height,
-      z: l.z
+      z: l.z,
     }))
     const connections = [
       [0, 1, 2, 3, 4], // Thumb
@@ -522,6 +578,36 @@ const drawFaceMeshResults = (results: any) => {
   })
 }
 
+const drawFaceDetectionResults = (results: any) => {
+  if (!canvasElement.value) return
+  const ctx = canvasElement.value.getContext('2d')
+  if (!ctx) return
+
+  ctx.clearRect(0, 0, canvasElement.value.width, canvasElement.value.height)
+  ctx.strokeStyle = 'red'
+  ctx.lineWidth = 2
+  ctx.font = '16px Arial'
+  ctx.fillStyle = 'red'
+
+  if (!results.detections || results.detections.length === 0) return
+
+  const width = canvasElement.value.width
+  const height = canvasElement.value.height
+
+  results.detections.forEach((detection: any) => {
+    const bbox = detection.locationData.relativeBoundingBox
+    const x = bbox.xmin * width
+    const y = bbox.ymin * height
+    const w = bbox.width * width
+    const h = bbox.height * height
+
+    ctx.beginPath()
+    ctx.rect(x, y, w, h)
+    ctx.stroke()
+    ctx.fillText(`Confidence: ${(detection.score[0] * 100).toFixed(1)}%`, x, y - 10)
+  })
+}
+
 const clearCanvas = () => {
   if (!canvasElement.value) return
   const ctx = canvasElement.value.getContext('2d')
@@ -556,10 +642,10 @@ const detectUploadedImage = async (endpoint: string) => {
     const response = await store.uploadImage(endpoint)
     result.value = response
     errorMessage.value = ''
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error detecting image:', error)
-    result.value = { error: 'Failed to detect image' }
-    errorMessage.value = 'Detection failed. Check console for details.'
+    result.value = { error: `Failed to detect image: ${error.message}` }
+    errorMessage.value = 'Detection failed. Check network or backend status.'
   }
 }
 

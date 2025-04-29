@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.openapi.utils import get_openapi
 import cv2
 import numpy as np
 from io import BytesIO
@@ -23,17 +24,19 @@ app = FastAPI(
             "name": "detection",
             "description": "Endpoints for various detection types (arm, arm-fingers, eyes, head, people)."
         }
-    ]
+    ],
+    docs_url="/docs",  # Explicitly enable Swagger UI
+    redoc_url="/redoc",  # Explicitly enable ReDoc
 )
 
-# CORS for FastAPI
+# CORS configuration
 origins = [
     "http://localhost:8080",
     "http://localhost:5173",
     "https://biomedical-frontend.vercel.app",
     "https://biomedical-frontend-3ci0ch4vj-badr-ribzat-project.vercel.app",
     "https://biomedical-frontend-r6wxrqdlx-badr-ribzat-project.vercel.app",
-    "https://*.vercel.app"
+    "https://*.vercel.app",
 ]
 
 app.add_middleware(
@@ -57,24 +60,27 @@ async def root():
 async def process_detection_task(endpoint: str, image: np.ndarray):
     """Process a single detection task based on the endpoint."""
     global previous_landmarks
-    if endpoint == "arm":
-        return detect_arm(image)
-    elif endpoint == "arm-fingers":
-        return detect_arm_fingers(image)
-    elif endpoint == "eyes":
-        return detect_eyes(image)
-    elif endpoint == "head":
-        return detect_head(image)
-    elif endpoint == "people":
-        result = detect_people(image, previous_landmarks)
-        previous_landmarks = result.get("previous_landmarks")
-        return {
-            "status": result["status"],
-            "count": result["count"],
-            "landmarks": result["landmarks"]
-        }
-    else:
-        raise HTTPException(status_code=400, detail="Invalid endpoint")
+    try:
+        if endpoint == "arm":
+            return detect_arm(image)
+        elif endpoint == "arm-fingers":
+            return detect_arm_fingers(image)
+        elif endpoint == "eyes":
+            return detect_eyes(image)
+        elif endpoint == "head":
+            return detect_head(image)
+        elif endpoint == "people":
+            result = detect_people(image, previous_landmarks)
+            previous_landmarks = result.get("previous_landmarks")
+            return {
+                "status": result["status"],
+                "count": result["count"],
+                "landmarks": result["landmarks"]
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Invalid endpoint")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Detection error: {str(e)}")
 
 async def process_queue():
     """Process tasks from the queue one at a time."""
@@ -89,7 +95,7 @@ async def process_queue():
             result = await process_detection_task(endpoint, image)
             future.set_result(result)
         except Exception as e:
-            future.set_exception(HTTPException(status_code=500, detail=f"Error processing image: {str(e)}"))
+            future.set_exception(e)
         await asyncio.sleep(0.1)
 
 @app.on_event("startup")
@@ -121,6 +127,11 @@ async def detect(endpoint: str, file: UploadFile = File(...)):
     - JSON response with detection results specific to the endpoint.
     """
     try:
+        # Validate endpoint
+        valid_endpoints = ["arm", "arm-fingers", "eyes", "head", "people"]
+        if endpoint not in valid_endpoints:
+            raise HTTPException(status_code=400, detail=f"Invalid endpoint. Must be one of {valid_endpoints}")
+
         # Process the uploaded image
         contents = await file.read()
         image = Image.open(BytesIO(contents)).convert("RGB")
@@ -136,22 +147,31 @@ async def detect(endpoint: str, file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing request: {str(e)}")
 
-# Customize OpenAPI schema to document possible endpoint values
+# Custom OpenAPI schema
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
-    # Call the parent class's openapi method to avoid recursion
-    openapi_schema = super(FastAPI, app).openapi()
-    # Ensure the path exists before modifying
-    path = openapi_schema["paths"].get("/detect/{endpoint}", {}).get("post", {})
-    if path and "parameters" in path and len(path["parameters"]) > 0:
-        path["parameters"][0]["schema"] = {
-            "type": "string",
-            "enum": ["arm", "arm-fingers", "eyes", "head", "people"],
-            "description": "The type of detection to perform."
-        }
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
+    try:
+        openapi_schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+            tags=app.openapi_tags,
+        )
+        # Ensure the endpoint parameter is correctly documented
+        path = openapi_schema["paths"].get("/detect/{endpoint}", {}).get("post", {})
+        if path and "parameters" in path and len(path["parameters"]) > 0:
+            path["parameters"][0]["schema"] = {
+                "type": "string",
+                "enum": ["arm", "arm-fingers", "eyes", "head", "people"],
+                "description": "The type of detection to perform."
+            }
+        app.openapi_schema = openapi_schema
+        return openapi_schema
+    except Exception as e:
+        print(f"Error generating OpenAPI schema: {str(e)}")
+        return {}
 
 app.openapi = custom_openapi
 
