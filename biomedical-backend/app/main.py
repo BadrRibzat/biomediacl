@@ -37,7 +37,8 @@ origins = [
     "https://biomedical-frontend-3ci0ch4vj-badr-ribzat-project.vercel.app",
     "https://biomedical-frontend-r6wxrqdlx-badr-ribzat-project.vercel.app",
     "https://biomedical-frontend-78ygwsva4-badr-ribzat-project.vercel.app",
-    "https://biomedical-frontend-bghcjaxnl-badr-ribzat-project.vercel.app",  # Added new frontend URL
+    "https://biomedical-frontend-bghcjaxnl-badr-ribzat-project.vercel.app",
+"https://*.vercel.app",  # Add wildcard for Vercel deployments
 ]
 
 app.add_middleware(
