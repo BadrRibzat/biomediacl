@@ -164,13 +164,13 @@ onMounted(() => {
   }
 
   Promise.all([
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.min.js'),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js').catch(() => {
+    loadScript('/mediapipe/pose.min.js'),
+    loadScript('/mediapipe/hands.min.js').catch(() => {
       handsFailed.value = true
       errorMessage.value = 'Failed to load hand detection library. Arm-Fingers detection is disabled.'
       console.error('Failed to load MediaPipe Hands script')
     }),
-    loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.min.js').catch(() => {
+    loadScript('/mediapipe/face_mesh.min.js').catch(() => {
       faceMeshFailed.value = true
       errorMessage.value = 'Failed to load face mesh library. Eye detection is disabled.'
       console.error('Failed to load MediaPipe Face Mesh script')
