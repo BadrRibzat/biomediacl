@@ -31,7 +31,7 @@
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
         >
           <span class="flex items-center">
-            <UploadIcon class="h-5 w-5 mr-2" />
+            <ArrowUpTrayIcon class="h-5 w-5 mr-2" />
             Upload Image
           </span>
         </button>
@@ -190,7 +190,7 @@
       
       <div class="mb-4">
         <div class="flex items-center mb-2">
-          <BadgeCheckIcon class="h-5 w-5 text-green-500 mr-2" />
+          <CheckBadgeIcon class="h-5 w-5 text-green-500 mr-2" />
           <span class="font-medium">Status:</span>
           <span class="ml-2 text-gray-700">{{ result.status }}</span>
         </div>
@@ -214,23 +214,20 @@
 <script setup lang="ts">
 import { ref, onUnmounted, onMounted, computed } from 'vue'
 import { useDetectionStore } from '../stores/detection'
-import { 
-  VideoCameraIcon,
-  ArrowUpTrayIcon as UploadIcon,
-  PlayIcon,
-  StopIcon,
-  CameraIcon,
-  ExclamationCircleIcon,
-  CheckIcon as BadgeCheckIcon,
-  UsersIcon,
-  HandIcon,
-  EyeIcon,
-  UserIcon,
-  IdentificationIcon,
-  ArrowPathIcon
-} from '@heroicons/vue/24/outline'
+import VideoCameraIcon from '@heroicons/vue/24/outline/VideoCameraIcon'
+import ArrowUpTrayIcon from '@heroicons/vue/24/outline/ArrowUpTrayIcon'
+import PlayIcon from '@heroicons/vue/24/outline/PlayIcon'
+import StopIcon from '@heroicons/vue/24/outline/StopIcon'
+import CameraIcon from '@heroicons/vue/24/outline/CameraIcon'
+import ExclamationCircleIcon from '@heroicons/vue/24/outline/ExclamationCircleIcon'
+import CheckBadgeIcon from '@heroicons/vue/24/outline/CheckBadgeIcon'
+import UsersIcon from '@heroicons/vue/24/outline/UsersIcon'
+import HandRaisedIcon from '@heroicons/vue/24/outline/HandRaisedIcon'
+import EyeIcon from '@heroicons/vue/24/outline/EyeIcon'
+import UserIcon from '@heroicons/vue/24/outline/UserIcon'
+import IdentificationIcon from '@heroicons/vue/24/outline/IdentificationIcon'
+import ArrowPathIcon from '@heroicons/vue/24/outline/ArrowPathIcon'
 
-// MediaPipe types
 declare global {
   interface Window {
     Pose: any
@@ -266,7 +263,7 @@ const detectionOptions = computed(() => [
   { 
     id: 'arm', 
     label: 'Arm', 
-    icon: HandIcon,
+    icon: HandRaisedIcon,
     disabled: !isCameraActive.value && mode.value === 'camera',
     failed: false
   },
@@ -300,22 +297,20 @@ const detectionOptions = computed(() => [
   }
 ])
 
-// Initialize MediaPipe models
-// In DetectionView.vue
 onMounted(async () => {
   try {
     await Promise.all([
-      loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.min.js'),
-      loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js'),
-      loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.min.js'),
-      loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.min.js')
-    ]);
-    console.log('All MediaPipe scripts loaded successfully');
+      loadScript('/mediapipe/pose.min.js'),
+      loadScript('/mediapipe/hands.min.js'),
+      loadScript('/mediapipe/face_mesh.min.js'),
+      loadScript('/mediapipe/face_detection.min.js')
+    ])
+    console.log('All MediaPipe scripts loaded successfully')
   } catch (err) {
-    console.error('Error loading MediaPipe scripts:', err);
-    errorMessage.value = 'Failed to load detection libraries. Please refresh the page.';
+    console.error('Error loading MediaPipe scripts:', err)
+    errorMessage.value = 'Failed to load detection libraries. Please refresh the page.'
   }
-});
+})
 
 const loadScript = (src: string, retryCount = 3, delay = 1000): Promise<void> => {
   return new Promise((resolve, reject) => {
@@ -336,7 +331,6 @@ const loadScript = (src: string, retryCount = 3, delay = 1000): Promise<void> =>
   })
 }
 
-// Mode switching
 const setMode = (newMode: 'camera' | 'upload') => {
   mode.value = newMode
   stopCamera()
@@ -345,7 +339,6 @@ const setMode = (newMode: 'camera' | 'upload') => {
   errorMessage.value = ''
 }
 
-// Camera functions
 const startCamera = async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -419,7 +412,6 @@ const stopCamera = () => {
   if (faceDetection) faceDetection.close()
 }
 
-// Detection control
 const toggleDetection = (endpoint: string) => {
   if (activeDetection.value === endpoint) {
     activeDetection.value = null
@@ -436,12 +428,11 @@ const startDetection = (endpoint: string) => {
   clearCanvas()
 
   try {
-    // Initialize appropriate model based on endpoint
     switch(endpoint) {
       case 'arm':
       case 'people':
         pose = new window.Pose({
-          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`
+          locateFile: (file: string) => `/mediapipe/${file}`
         })
         pose.setOptions({
           modelComplexity: 1,
@@ -454,7 +445,7 @@ const startDetection = (endpoint: string) => {
       case 'arm-fingers':
         if (handsFailed.value) return
         hands = new window.Hands({
-          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+          locateFile: (file: string) => `/mediapipe/${file}`
         })
         hands.setOptions({
           maxNumHands: 2,
@@ -467,7 +458,7 @@ const startDetection = (endpoint: string) => {
       case 'eyes':
         if (faceMeshFailed.value) return
         faceMesh = new window.FaceMesh({
-          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`
+          locateFile: (file: string) => `/mediapipe/${file}`
         })
         faceMesh.setOptions({
           maxNumFaces: 1,
@@ -480,16 +471,15 @@ const startDetection = (endpoint: string) => {
         
       case 'head':
         faceDetection = new window.FaceDetection({
-          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`
+          locateFile: (file: string) => `/mediapipe/${file}`
         })
         faceDetection.setOptions({
-          minDetectionConfidence: 0.3  // Lower confidence for better detection
+          minDetectionConfidence: 0.3
         })
         faceDetection.onResults((results: any) => drawFaceDetectionResults(results))
         break
     }
 
-    // Start processing frames
     const processFrame = async () => {
       if (!videoElement.value || !isCameraActive.value) return
       
@@ -518,11 +508,9 @@ const startDetection = (endpoint: string) => {
 
     processFrame()
 
-    // Get JSON results from backend periodically
     jsonInterval = setInterval(async () => {
       await fetchJsonResults(endpoint)
-    }, 1000) // Fetch every second
-
+    }, 1000)
   } catch (err) {
     console.error('Error initializing detection:', err)
     errorMessage.value = `Failed to initialize ${endpoint} detection. Please try again.`
@@ -551,7 +539,6 @@ const clearCanvas = () => {
   }
 }
 
-// Drawing functions
 const drawPoseResults = (endpoint: string, results: any) => {
   const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value
   if (!canvas) return
@@ -559,7 +546,6 @@ const drawPoseResults = (endpoint: string, results: any) => {
   const ctx = canvas.getContext('2d')
   if (!ctx || !results.poseLandmarks) return
 
-  // Set canvas dimensions if they don't match
   const video = mode.value === 'camera' ? videoElement.value : null
   if (video && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
     canvas.width = video.videoWidth
@@ -578,12 +564,9 @@ const drawPoseResults = (endpoint: string, results: any) => {
   }))
 
   if (endpoint === 'arm') {
-    // Draw left arm (shoulder, elbow, wrist)
     drawArm(ctx, landmarks, [11, 13, 15], 'red')
-    // Draw right arm (shoulder, elbow, wrist)
     drawArm(ctx, landmarks, [12, 14, 16], 'blue')
   } else if (endpoint === 'people') {
-    // Draw full pose
     drawFullPose(ctx, landmarks)
   }
 }
@@ -596,12 +579,11 @@ const drawArm = (ctx: CanvasRenderingContext2D, landmarks: any[], indices: numbe
   ctx.beginPath()
   indices.forEach((idx, i) => {
     const lm = landmarks[idx]
-    if (lm.visibility < 0.5) return // Skip if landmark not visible enough
+    if (lm.visibility < 0.5) return
     
     if (i === 0) ctx.moveTo(lm.x, lm.y)
     else ctx.lineTo(lm.x, lm.y)
     
-    // Draw landmark point
     ctx.beginPath()
     ctx.arc(lm.x, lm.y, 4, 0, 2 * Math.PI)
     ctx.fill()
@@ -610,17 +592,15 @@ const drawArm = (ctx: CanvasRenderingContext2D, landmarks: any[], indices: numbe
 }
 
 const drawFullPose = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
-  // Pose connections (simplified)
   const connections = [
-    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // Arms
-    [11, 23], [12, 24], [23, 24], [23, 25], [24, 26]  // Torso and legs
+    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+    [11, 23], [12, 24], [23, 24], [23, 25], [24, 26]
   ]
 
   ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)'
   ctx.fillStyle = 'rgba(0, 255, 0, 0.6)'
   ctx.lineWidth = 2
 
-  // Draw connections
   connections.forEach(([i, j]) => {
     const lm1 = landmarks[i]
     const lm2 = landmarks[j]
@@ -633,16 +613,12 @@ const drawFullPose = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
     ctx.stroke()
   })
 
-  // Draw landmarks
   landmarks.forEach((lm, idx) => {
     if (lm.visibility < 0.5) return
     
     ctx.beginPath()
     ctx.arc(lm.x, lm.y, 3, 0, 2 * Math.PI)
     ctx.fill()
-    
-    // Optionally draw landmark index for debugging
-    // ctx.fillText(idx.toString(), lm.x + 5, lm.y)
   })
 }
 
@@ -662,24 +638,21 @@ const drawHandsResults = (results: any) => {
     const handedness = results.multiHandedness[idx].classification[0].label
     const color = handedness === 'Left' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 0, 255, 0.8)'
     
-    // Draw landmarks
     ctx.fillStyle = color
     landmarks.forEach((lm: any) => {
       const x = lm.x * width
       const y = lm.y * height
       ctx.beginPath()
-      ctx.arc(x, y, 3, 0, 2 * Math.PI)
+      ctx.arc(x, y, 3, 0, 2 * Math PI)
       ctx.fill()
     })
 
-    // Draw connections
     ctx.strokeStyle = color
     ctx.lineWidth = 2
     
-    // Palm connections
     const palmConnections = [
-      [0, 1, 2, 5, 9, 13, 17, 0], // Palm outline
-      [1, 5], [5, 9], [9, 13], [13, 17], [17, 0] // Palm spokes
+      [0, 1, 2, 5, 9, 13, 17, 0],
+      [1, 5], [5, 9], [9, 13], [13, 17], [17, 0]
     ]
     
     palmConnections.forEach(conn => {
@@ -694,13 +667,12 @@ const drawHandsResults = (results: any) => {
       ctx.stroke()
     })
 
-    // Finger connections
     const fingers = [
-      [0, 1, 2, 3, 4],   // Thumb
-      [0, 5, 6, 7, 8],    // Index
-      [0, 9, 10, 11, 12], // Middle
-      [0, 13, 14, 15, 16], // Ring
-      [0, 17, 18, 19, 20]  // Pinky
+      [0, 1, 2, 3, 4],
+      [0, 5, 6, 7, 8],
+      [0, 9, 10, 11, 12],
+      [0, 13, 14, 15, 16],
+      [0, 17, 18, 19, 20]
     ]
     
     fingers.forEach(finger => {
@@ -730,7 +702,6 @@ const drawFaceMeshResults = (results: any) => {
   const height = canvas.height
 
   results.multiFaceLandmarks.forEach((landmarks: any) => {
-    // Draw iris landmarks (left eye: 468-473, right eye: 474-479)
     ctx.fillStyle = 'rgba(0, 255, 255, 0.8)'
     
     const leftIrisIndices = Array.from({length: 6}, (_, i) => 468 + i)
@@ -768,19 +739,16 @@ const drawFaceDetectionResults = (results: any) => {
     const w = bbox.width * width
     const h = bbox.height * height
 
-    // Draw bounding box
     ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)'
     ctx.lineWidth = 2
     ctx.beginPath()
     ctx.rect(x, y, w, h)
     ctx.stroke()
 
-    // Draw confidence score
     ctx.fillStyle = 'rgba(255, 165, 0, 0.8)'
     ctx.font = '14px Arial'
     ctx.fillText(`Confidence: ${(detection.score[0] * 100).toFixed(1)}%`, x, y - 10)
 
-    // Draw key points (eyes, nose, mouth)
     if (detection.locationData.relativeKeypoints) {
       ctx.fillStyle = 'rgba(255, 0, 0, 0.8)'
       detection.locationData.relativeKeypoints.forEach((kp: any) => {
@@ -794,7 +762,6 @@ const drawFaceDetectionResults = (results: any) => {
   })
 }
 
-// JSON results from backend
 const fetchJsonResults = async (endpoint: string) => {
   try {
     let imageSource: HTMLVideoElement | HTMLImageElement | null = null
@@ -804,17 +771,25 @@ const fetchJsonResults = async (endpoint: string) => {
       imageSource = videoElement.value
     } else {
       if (!uploadedImage.value) return
-      // For upload mode, we need to create an image element
       const img = new Image()
-      img.src = uploadedImage.value
+      img.src = uploadedImage.value!
+      await new Promise((resolve) => {
+        img.onload = resolve
+      })
       imageSource = img
     }
 
     if (!imageSource) return
     
     const canvas = document.createElement('canvas')
-    canvas.width = imageSource.videoWidth || imageSource.width
-    canvas.height = imageSource.videoHeight || imageSource.height
+    // Use type guard to handle HTMLVideoElement vs HTMLImageElement
+    if (imageSource instanceof HTMLVideoElement) {
+      canvas.width = imageSource.videoWidth
+      canvas.height = imageSource.videoHeight
+    } else {
+      canvas.width = imageSource.naturalWidth
+      canvas.height = imageSource.naturalHeight
+    }
     
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -841,13 +816,12 @@ const fetchJsonResults = async (endpoint: string) => {
   }
 }
 
-// Upload mode functions
 const handleImageUpload = (event: Event) => {
   const input = event.target as HTMLInputElement
   if (!input.files || !input.files[0]) return
   
   const file = input.files[0]
-  if (file.size > 5 * 1024 * 1024) { // 5MB limit
+  if (file.size > 5 * 1024 * 1024) {
     errorMessage.value = 'Image size exceeds 5MB limit'
     return
   }
@@ -859,7 +833,6 @@ const handleImageUpload = (event: Event) => {
     result.value = null
     errorMessage.value = ''
     
-    // Initialize canvas for upload mode
     if (uploadCanvasElement.value) {
       const img = new Image()
       img.onload = () => {
@@ -881,11 +854,10 @@ const detectUploadedImage = async (endpoint: string) => {
   try {
     activeDetection.value = endpoint
     
-    // First draw local visualization if possible
     if (endpoint === 'arm-fingers' && !handsFailed.value && uploadCanvasElement.value) {
       if (!hands) {
         hands = new window.Hands({
-          locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+          locateFile: (file: string) => `/mediapipe/${file}`
         })
         hands.setOptions({
           maxNumHands: 2,
@@ -895,15 +867,15 @@ const detectUploadedImage = async (endpoint: string) => {
         hands.onResults((results: any) => drawHandsResults(results))
       }
       
-      const img = new Image()
-      img.onload = () => {
-        hands.send({ image: img })
+      if (uploadedImage.value) {
+        const img = new Image()
+        img.onload = () => {
+          hands.send({ image: img })
+        }
+        img.src = uploadedImage.value
       }
-      img.src = uploadedImage.value
     }
-    // Similar for other detection types...
 
-    // Then get backend results
     const response = await store.uploadImage(endpoint)
     result.value = response
     errorMessage.value = ''
@@ -922,7 +894,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Custom styles for the detection view */
 .container {
   max-width: 1200px;
 }

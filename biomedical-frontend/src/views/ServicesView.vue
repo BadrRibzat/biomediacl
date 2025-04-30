@@ -128,7 +128,7 @@ import {
   ServerIcon,
   CubeIcon,
   ArrowRightIcon
-} from '@heroicons/vue/outline'
+} from '@heroicons/vue/24/outline'
 
 const services = [
   {

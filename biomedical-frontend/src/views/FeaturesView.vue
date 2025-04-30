@@ -13,12 +13,12 @@
 
       <div class="mt-10">
         <div class="space-y-10 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-10">
-          <div v-for="feature in features" :key="feature.name" class="relative">
+          <div v-for="feature in features" :key="feature.title" class="relative">
             <dt>
               <div class="absolute flex items-center justify-center h-12 w-12 rounded-md bg-primary-500 text-white">
                 <component :is="feature.icon" class="h-6 w-6" />
               </div>
-              <p class="ml-16 text-lg leading-6 font-medium text-gray-900">{{ feature.name }}</p>
+              <p class="ml-16 text-lg leading-6 font-medium text-gray-900">{{ feature.title }}</p>
             </dt>
             <dd class="mt-2 ml-16 text-base text-gray-500">
               {{ feature.description }}
@@ -43,7 +43,6 @@
 
       <!-- Call to action -->
       <div class="mt-20 text-center">
-        <h3 class="text-2xl font-bold text-gray-900 mb-4">Ready to try it out?</h3>
         <router-link 
           to="/detection" 
           class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700"
@@ -57,49 +56,45 @@
 </template>
 
 <script setup lang="ts">
-import { 
-  EyeIcon, 
-  HandIcon, 
-  UserIcon, 
-  UsersIcon, 
-  AcademicCapIcon, 
-  CodeIcon,
-  ServerIcon,
-  LightningBoltIcon,
-  ArrowRightIcon
-} from '@heroicons/vue/outline'
+import HandRaisedIcon from '@heroicons/vue/24/outline/HandRaisedIcon'
+import EyeIcon from '@heroicons/vue/24/outline/EyeIcon'
+import UserIcon from '@heroicons/vue/24/outline/UserIcon'
+import UsersIcon from '@heroicons/vue/24/outline/UsersIcon'
+import AcademicCapIcon from '@heroicons/vue/24/outline/AcademicCapIcon'
+import CodeBracketIcon from '@heroicons/vue/24/outline/CodeBracketIcon'
+import ArrowRightIcon from '@heroicons/vue/24/outline/ArrowRightIcon'
 
 const features = [
   {
-    name: 'Arm & Hand Detection',
-    description: 'Precisely tracks arm positions and finger movements using MediaPipe Pose and Hands models with landmark visualization.',
-    icon: HandIcon,
+    title: 'Arm & Hand Detection',
+    description: 'Advanced tracking of arm positions and finger movements with real-time visualization.',
+    icon: HandRaisedIcon,
+    link: '/detection'
   },
   {
-    name: 'Eye Tracking',
-    description: 'Detects iris positions and eye movements with high accuracy, useful for various biomedical applications.',
+    title: 'Eye Detection',
+    description: 'Accurate detection of eye positions using MediaPipe Face Mesh for precise analysis.',
     icon: EyeIcon,
+    link: '/detection'
   },
   {
-    name: 'Head & Face Analysis',
-    description: 'Identifies head position and facial features with bounding boxes and key points for posture analysis.',
-    icon: UserIcon,
-  },
-  {
-    name: 'People Counting',
-    description: 'Counts and tracks multiple people in the frame with pose estimation and movement tracking.',
+    title: 'Head & People Detection',
+    description: 'Robust detection of head orientation and multiple people in a single frame.',
     icon: UsersIcon,
+    link: '/detection'
   },
   {
-    name: 'Educational Focus',
-    description: 'Designed specifically for biomedical engineering students with detailed documentation and examples.',
+    title: 'Educational Resource',
+    description: 'Designed for students and researchers to explore biomedical vision technologies.',
     icon: AcademicCapIcon,
+    link: '/about'
   },
   {
-    name: 'Open Source',
-    description: 'Completely open-source with MIT license for learning, customization, and extension.',
-    icon: CodeIcon,
-  },
+    title: 'Open Source',
+    description: 'Completely open-source with MIT license for learning and customization.',
+    icon: CodeBracketIcon,
+    link: 'https://github.com/BadrRibzat/biomediacl'
+  }
 ]
 
 const specifications = [

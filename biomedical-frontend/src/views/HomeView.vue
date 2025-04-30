@@ -61,8 +61,20 @@
               </p>
             </div>
             <div class="mt-6">
-              <router-link :to="feature.link" class="text-base font-medium text-primary-600 hover:text-primary-500">
-                Learn more<span aria-hidden="true"> &rarr;</span>
+              <a
+                v-if="feature.isExternal"
+                :href="feature.link"
+                target="_blank"
+                class="text-base font-medium text-primary-600 hover:text-primary-500"
+              >
+                Learn more<span aria-hidden="true"> →</span>
+              </a>
+              <router-link
+                v-else
+                :to="feature.link"
+                class="text-base font-medium text-primary-600 hover:text-primary-500"
+              >
+                Learn more<span aria-hidden="true"> →</span>
               </router-link>
             </div>
           </div>
@@ -89,50 +101,55 @@
 </template>
 
 <script setup lang="ts">
-import { 
-  EyeIcon, 
-  HandIcon, 
-  UserIcon, 
-  UsersIcon, 
-  AcademicCapIcon 
-} from '@heroicons/vue/24/outline'
+import HandRaisedIcon from '@heroicons/vue/24/outline/HandRaisedIcon'
+import EyeIcon from '@heroicons/vue/24/outline/EyeIcon'
+import UserIcon from '@heroicons/vue/24/outline/UserIcon'
+import UsersIcon from '@heroicons/vue/24/outline/UsersIcon'
+import AcademicCapIcon from '@heroicons/vue/24/outline/AcademicCapIcon'
+import CodeBracketIcon from '@heroicons/vue/24/outline/CodeBracketIcon'
 
 const features = [
   {
     title: 'Arm & Hand Detection',
     description: 'Track arm positions and finger movements with high precision using MediaPipe Pose and Hands models.',
-    icon: HandIcon,
-    link: '/detection'
+    icon: HandRaisedIcon,
+    link: '/detection',
+    isExternal: false
   },
   {
     title: 'Eye Tracking',
     description: 'Detect iris positions and eye movements for potential biomedical applications like fatigue detection.',
     icon: EyeIcon,
-    link: '/detection'
+    link: '/detection',
+    isExternal: false
   },
   {
     title: 'Head & Face Analysis',
     description: 'Identify head position and facial features for posture analysis and other medical applications.',
     icon: UserIcon,
-    link: '/detection'
+    link: '/detection',
+    isExternal: false
   },
   {
     title: 'People Counting',
     description: 'Count and track multiple people in the frame with pose estimation capabilities.',
     icon: UsersIcon,
-    link: '/detection'
+    link: '/detection',
+    isExternal: false
   },
   {
     title: 'Educational Focus',
     description: 'Designed specifically for biomedical engineering students and educators.',
     icon: AcademicCapIcon,
-    link: '/about'
+    link: '/about',
+    isExternal: false
   },
   {
     title: 'Open Source',
     description: 'Completely open-source with MIT license for learning and customization.',
-    icon: 'svg',
-    link: 'https://github.com/BadrRibzat/biomediacl'
+    icon: CodeBracketIcon,
+    link: 'https://github.com/BadrRibzat/biomediacl',
+    isExternal: true
   }
 ]
 </script>
