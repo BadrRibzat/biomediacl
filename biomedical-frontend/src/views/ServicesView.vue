@@ -42,7 +42,7 @@
             <div class="bg-white rounded-lg shadow p-6">
               <div class="flex items-center">
                 <div class="flex-shrink-0 bg-primary-500 rounded-md p-2">
-                  <CodeIcon class="h-6 w-6 text-white" />
+                  <CodeBracketIcon class="h-6 w-6 text-white" />
                 </div>
                 <div class="ml-4">
                   <h4 class="text-lg font-medium text-gray-900">Swagger UI</h4>
@@ -120,15 +120,13 @@ const detectArm = async (imageFile) => {
 </template>
 
 <script setup lang="ts">
-import { 
-  ShieldCheckIcon,
-  LightningBoltIcon,
-  ScaleIcon,
-  CodeIcon,
-  ServerIcon,
-  CubeIcon,
-  ArrowRightIcon
-} from '@heroicons/vue/24/outline'
+import ShieldCheckIcon from '@heroicons/vue/24/outline/ShieldCheckIcon';
+import BoltIcon from '@heroicons/vue/24/outline/BoltIcon';
+import ScaleIcon from '@heroicons/vue/24/outline/ScaleIcon';
+import CodeBracketIcon from '@heroicons/vue/24/outline/CodeBracketIcon';
+import ServerIcon from '@heroicons/vue/24/outline/ServerIcon';
+import CubeIcon from '@heroicons/vue/24/outline/CubeIcon';
+import ArrowRightIcon from '@heroicons/vue/24/outline/ArrowRightIcon';
 
 const services = [
   {
@@ -139,7 +137,7 @@ const services = [
   {
     name: 'High-Performance Models',
     description: 'Utilizing optimized MediaPipe models for real-time detection with low latency.',
-    icon: LightningBoltIcon,
+    icon: BoltIcon,
   },
   {
     name: 'Scalable Infrastructure',

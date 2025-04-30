@@ -1,4 +1,5 @@
 <template>
+  <!-- Unchanged template -->
   <div class="container mx-auto px-4 py-8">
     <div class="text-center mb-8">
       <h1 class="text-3xl font-bold text-gray-900 mb-2">Biomedical Detection</h1>
@@ -212,52 +213,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, onMounted, computed } from 'vue'
-import { useDetectionStore } from '../stores/detection'
-import VideoCameraIcon from '@heroicons/vue/24/outline/VideoCameraIcon'
-import ArrowUpTrayIcon from '@heroicons/vue/24/outline/ArrowUpTrayIcon'
-import PlayIcon from '@heroicons/vue/24/outline/PlayIcon'
-import StopIcon from '@heroicons/vue/24/outline/StopIcon'
-import CameraIcon from '@heroicons/vue/24/outline/CameraIcon'
-import ExclamationCircleIcon from '@heroicons/vue/24/outline/ExclamationCircleIcon'
-import CheckBadgeIcon from '@heroicons/vue/24/outline/CheckBadgeIcon'
-import UsersIcon from '@heroicons/vue/24/outline/UsersIcon'
-import HandRaisedIcon from '@heroicons/vue/24/outline/HandRaisedIcon'
-import EyeIcon from '@heroicons/vue/24/outline/EyeIcon'
-import UserIcon from '@heroicons/vue/24/outline/UserIcon'
-import IdentificationIcon from '@heroicons/vue/24/outline/IdentificationIcon'
-import ArrowPathIcon from '@heroicons/vue/24/outline/ArrowPathIcon'
+import { ref, onUnmounted, onMounted, computed } from 'vue';
+import { useDetectionStore } from '../stores/detection';
+import { 
+  FilesetResolver, 
+  PoseLandmarker, 
+  HandLandmarker, 
+  FaceLandmarker, 
+  // FaceDetector 
+} from '@mediapipe/tasks-vision';
+import VideoCameraIcon from '@heroicons/vue/24/outline/VideoCameraIcon';
+import ArrowUpTrayIcon from '@heroicons/vue/24/outline/ArrowUpTrayIcon';
+import PlayIcon from '@heroicons/vue/24/outline/PlayIcon';
+import StopIcon from '@heroicons/vue/24/outline/StopIcon';
+import CameraIcon from '@heroicons/vue/24/outline/CameraIcon';
+import ExclamationCircleIcon from '@heroicons/vue/24/outline/ExclamationCircleIcon';
+import CheckBadgeIcon from '@heroicons/vue/24/outline/CheckBadgeIcon';
+import UsersIcon from '@heroicons/vue/24/outline/UsersIcon';
+import HandRaisedIcon from '@heroicons/vue/24/outline/HandRaisedIcon';
+import EyeIcon from '@heroicons/vue/24/outline/EyeIcon';
+import UserIcon from '@heroicons/vue/24/outline/UserIcon';
+import IdentificationIcon from '@heroicons/vue/24/outline/IdentificationIcon';
 
-declare global {
-  interface Window {
-    Pose: any
-    Hands: any
-    FaceMesh: any
-    FaceDetection: any
-  }
-}
+const store = useDetectionStore();
+const videoElement = ref<HTMLVideoElement | null>(null);
+const canvasElement = ref<HTMLCanvasElement | null>(null);
+const uploadCanvasElement = ref<HTMLCanvasElement | null>(null);
+const isCameraActive = ref(false);
+const result = ref<any>(null);
+const activeDetection = ref<string | null>(null);
+const mode = ref<'camera' | 'upload'>('camera');
+const uploadedImage = ref<string | null>(null);
+const errorMessage = ref('');
+const handsFailed = ref(false);
+const faceLandmarkerFailed = ref(false);
+// const faceDetectorFailed = ref(false);
 
-const store = useDetectionStore()
-const videoElement = ref<HTMLVideoElement | null>(null)
-const canvasElement = ref<HTMLCanvasElement | null>(null)
-const uploadCanvasElement = ref<HTMLCanvasElement | null>(null)
-const isCameraActive = ref(false)
-const result = ref<any>(null)
-const activeDetection = ref<string | null>(null)
-const mode = ref<'camera' | 'upload'>('camera')
-const uploadedImage = ref<string | null>(null)
-const errorMessage = ref('')
-const handsFailed = ref(false)
-const faceMeshFailed = ref(false)
-const faceDetectionFailed = ref(false)
-
-let stream: MediaStream | null = null
-let pose: any | null = null
-let hands: any | null = null
-let faceMesh: any | null = null
-let faceDetection: any | null = null
-let rafId: number | null = null
-let jsonInterval: number | null = null
+let stream: MediaStream | null = null;
+let poseLandmarker: PoseLandmarker | null = null;
+let handLandmarker: HandLandmarker | null = null;
+let faceLandmarker: FaceLandmarker | null = null;
+// let faceDetector: FaceDetector | null = null;
+let vision: any | null = null;
+let rafId: number | null = null;
+let jsonInterval: number | null = null;
 
 const detectionOptions = computed(() => [
   { 
@@ -278,16 +277,16 @@ const detectionOptions = computed(() => [
     id: 'eyes', 
     label: 'Eyes', 
     icon: EyeIcon,
-    disabled: (!isCameraActive.value && mode.value === 'camera') || faceMeshFailed.value,
-    failed: faceMeshFailed.value
+    disabled: (!isCameraActive.value && mode.value === 'camera') || faceLandmarkerFailed.value,
+    failed: faceLandmarkerFailed.value
   },
-  { 
-    id: 'head', 
-    label: 'Head', 
-    icon: UserIcon,
-    disabled: (!isCameraActive.value && mode.value === 'camera') || faceDetectionFailed.value,
-    failed: faceDetectionFailed.value
-  },
+  // { 
+  //   id: 'head', 
+  //   label: 'Head', 
+  //   icon: UserIcon,
+  //   disabled: (!isCameraActive.value && mode.value === 'camera') || faceDetectorFailed.value,
+  //   failed: faceDetectorFailed.value
+  // },
   { 
     id: 'people', 
     label: 'People', 
@@ -295,49 +294,27 @@ const detectionOptions = computed(() => [
     disabled: !isCameraActive.value && mode.value === 'camera',
     failed: false
   }
-])
+]);
 
 onMounted(async () => {
   try {
-    await Promise.all([
-      loadScript('/mediapipe/pose.min.js'),
-      loadScript('/mediapipe/hands.min.js'),
-      loadScript('/mediapipe/face_mesh.min.js'),
-      loadScript('/mediapipe/face_detection.min.js')
-    ])
-    console.log('All MediaPipe scripts loaded successfully')
+    vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+    );
+    console.log('MediaPipe Tasks Vision initialized');
   } catch (err) {
-    console.error('Error loading MediaPipe scripts:', err)
-    errorMessage.value = 'Failed to load detection libraries. Please refresh the page.'
+    console.error('Error initializing Tasks Vision:', err);
+    errorMessage.value = 'Failed to initialize detection libraries. Please refresh the page.';
   }
-})
-
-const loadScript = (src: string, retryCount = 3, delay = 1000): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    const attemptLoad = (attemptsLeft: number) => {
-      const script = document.createElement('script')
-      script.src = src
-      script.onload = () => resolve()
-      script.onerror = () => {
-        if (attemptsLeft > 0) {
-          setTimeout(() => attemptLoad(attemptsLeft - 1), delay)
-        } else {
-          reject(new Error(`Failed to load script: ${src}`))
-        }
-      }
-      document.head.appendChild(script)
-    }
-    attemptLoad(retryCount)
-  })
-}
+});
 
 const setMode = (newMode: 'camera' | 'upload') => {
-  mode.value = newMode
-  stopCamera()
-  uploadedImage.value = null
-  result.value = null
-  errorMessage.value = ''
-}
+  mode.value = newMode;
+  stopCamera();
+  uploadedImage.value = null;
+  result.value = null;
+  errorMessage.value = '';
+};
 
 const startCamera = async () => {
   try {
@@ -348,324 +325,335 @@ const startCamera = async () => {
         height: { ideal: 720 } 
       },
       audio: false
-    })
+    });
     
     if (videoElement.value) {
-      videoElement.value.srcObject = stream
-      await videoElement.value.play()
-      isCameraActive.value = true
-      errorMessage.value = ''
+      videoElement.value.srcObject = stream;
+      await videoElement.value.play();
+      isCameraActive.value = true;
+      errorMessage.value = '';
       
       if (canvasElement.value) {
-        canvasElement.value.width = videoElement.value.videoWidth
-        canvasElement.value.height = videoElement.value.videoHeight
+        canvasElement.value.width = videoElement.value.videoWidth;
+        canvasElement.value.height = videoElement.value.videoHeight;
       }
     }
   } catch (error: any) {
-    console.error('Error accessing camera:', error)
-    handleCameraError(error)
+    console.error('Error accessing camera:', error);
+    handleCameraError(error);
   }
-}
+};
 
 const handleCameraError = (error: any) => {
-  let message = 'Error accessing camera'
+  let message = 'Error accessing camera';
   
   switch(error.name) {
     case 'NotAllowedError':
-      message = 'Camera access denied. Please grant camera permissions.'
-      break
+      message = 'Camera access denied. Please grant camera permissions.';
+      break;
     case 'NotFoundError':
-      message = 'No camera found. Please connect a camera or use upload mode.'
-      break
+      message = 'No camera found. Please connect a camera or use upload mode.';
+      break;
     case 'NotReadableError':
-      message = 'Camera is in use by another application. Please close other apps.'
-      break
+      message = 'Camera is in use by another application. Please close other apps.';
+      break;
     case 'OverconstrainedError':
-      message = 'Camera constraints could not be satisfied. Try different settings.'
-      break
+      message = 'Camera constraints could not be satisfied. Try different settings.';
+      break;
     default:
-      message = `Camera error: ${error.message}`
+      message = `Camera error: ${error.message}`;
   }
   
-  errorMessage.value = message
-}
+  errorMessage.value = message;
+};
 
 const stopCamera = () => {
   if (stream) {
-    stream.getTracks().forEach(track => track.stop())
-    stream = null
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
   }
   
-  isCameraActive.value = false
-  activeDetection.value = null
+  isCameraActive.value = false;
+  activeDetection.value = null;
   
   if (videoElement.value) {
-    videoElement.value.srcObject = null
+    videoElement.value.srcObject = null;
   }
   
-  stopDetection()
-  clearCanvas()
+  stopDetection();
+  clearCanvas();
   
-  if (pose) pose.close()
-  if (hands) hands.close()
-  if (faceMesh) faceMesh.close()
-  if (faceDetection) faceDetection.close()
-}
+  if (poseLandmarker) poseLandmarker.close();
+  if (handLandmarker) handLandmarker.close();
+  if (faceLandmarker) faceLandmarker.close();
+  // if (faceDetector) faceDetector.close();
+};
 
 const toggleDetection = (endpoint: string) => {
   if (activeDetection.value === endpoint) {
-    activeDetection.value = null
-    stopDetection()
-    clearCanvas()
+    activeDetection.value = null;
+    stopDetection();
+    clearCanvas();
   } else {
-    activeDetection.value = endpoint
-    startDetection(endpoint)
+    activeDetection.value = endpoint;
+    startDetection(endpoint);
   }
-}
+};
 
-const startDetection = (endpoint: string) => {
-  stopDetection()
-  clearCanvas()
+const startDetection = async (endpoint: string) => {
+  stopDetection();
+  clearCanvas();
 
   try {
     switch(endpoint) {
       case 'arm':
       case 'people':
-        pose = new window.Pose({
-          locateFile: (file: string) => `/mediapipe/${file}`
-        })
-        pose.setOptions({
-          modelComplexity: 1,
-          minDetectionConfidence: 0.5,
+        poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/mediapipe/pose.task'
+          },
+          runningMode: 'VIDEO',
+          minPoseDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
-        })
-        pose.onResults((results: any) => drawPoseResults(endpoint, results))
-        break
+        });
+        break;
         
       case 'arm-fingers':
-        if (handsFailed.value) return
-        hands = new window.Hands({
-          locateFile: (file: string) => `/mediapipe/${file}`
-        })
-        hands.setOptions({
-          maxNumHands: 2,
-          minDetectionConfidence: 0.5,
+        if (handsFailed.value) return;
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/mediapipe/hands.task'
+          },
+          runningMode: 'VIDEO',
+          numHands: 2,
+          minHandDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
-        })
-        hands.onResults((results: any) => drawHandsResults(results))
-        break
+        });
+        break;
         
       case 'eyes':
-        if (faceMeshFailed.value) return
-        faceMesh = new window.FaceMesh({
-          locateFile: (file: string) => `/mediapipe/${file}`
-        })
-        faceMesh.setOptions({
-          maxNumFaces: 1,
-          refineLandmarks: true,
-          minDetectionConfidence: 0.5,
+        if (faceLandmarkerFailed.value) return;
+        faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/mediapipe/face_mesh.task'
+          },
+          runningMode: 'VIDEO',
+          minFaceDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
-        })
-        faceMesh.onResults((results: any) => drawFaceMeshResults(results))
-        break
+        });
+        break;
         
-      case 'head':
-        faceDetection = new window.FaceDetection({
-          locateFile: (file: string) => `/mediapipe/${file}`
-        })
-        faceDetection.setOptions({
-          minDetectionConfidence: 0.3
-        })
-        faceDetection.onResults((results: any) => drawFaceDetectionResults(results))
-        break
+      // case 'head':
+      //   if (faceDetectorFailed.value) {
+      //     errorMessage.value = 'Head detection is currently unavailable due to missing model file.';
+      //     return;
+      //   }
+      //   faceDetector = await FaceDetector.createFromOptions(vision, {
+      //     baseOptions: {
+      //       modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.task'
+      //     },
+      //     runningMode: 'VIDEO',
+      //     minDetectionConfidence: 0.3
+      //   });
+      //   break;
     }
 
     const processFrame = async () => {
-      if (!videoElement.value || !isCameraActive.value) return
+      if (!videoElement.value || !isCameraActive.value) return;
       
       try {
-        if (pose && (endpoint === 'arm' || endpoint === 'people')) {
-          await pose.send({ image: videoElement.value })
+        if (poseLandmarker && (endpoint === 'arm' || endpoint === 'people')) {
+          const results = await poseLandmarker.detectForVideo(videoElement.value, performance.now());
+          drawPoseResults(endpoint, results);
         }
-        if (hands && endpoint === 'arm-fingers' && !handsFailed.value) {
-          await hands.send({ image: videoElement.value })
+        if (handLandmarker && endpoint === 'arm-fingers' && !handsFailed.value) {
+          const results = await handLandmarker.detectForVideo(videoElement.value, performance.now());
+          drawHandsResults(results);
         }
-        if (faceMesh && endpoint === 'eyes' && !faceMeshFailed.value) {
-          await faceMesh.send({ image: videoElement.value })
+        if (faceLandmarker && endpoint === 'eyes' && !faceLandmarkerFailed.value) {
+          const results = await faceLandmarker.detectForVideo(videoElement.value, performance.now());
+          drawFaceLandmarkerResults(results);
         }
-        if (faceDetection && endpoint === 'head') {
-          await faceDetection.send({ image: videoElement.value })
-        }
+        // if (faceDetector && endpoint === 'head') {
+        //   const results = await faceDetector.detectForVideo(videoElement.value, performance.now());
+        //   drawFaceDetectorResults(results);
+        // }
       } catch (err) {
-        console.error('Error processing frame:', err)
-        errorMessage.value = 'Error processing video frame. Please try again.'
-        stopDetection()
-        return
+        console.error('Error processing frame:', err);
+        errorMessage.value = 'Error processing video frame. Please try again.';
+        stopDetection();
+        return;
       }
       
-      rafId = requestAnimationFrame(processFrame)
-    }
+      rafId = requestAnimationFrame(processFrame);
+    };
 
-    processFrame()
+    processFrame();
 
     jsonInterval = setInterval(async () => {
-      await fetchJsonResults(endpoint)
-    }, 1000)
+      await fetchJsonResults(endpoint);
+    }, 1000);
   } catch (err) {
-    console.error('Error initializing detection:', err)
-    errorMessage.value = `Failed to initialize ${endpoint} detection. Please try again.`
-    activeDetection.value = null
+    console.error('Error initializing detection:', err);
+    errorMessage.value = `Failed to initialize ${endpoint} detection. Please try again.`;
+    activeDetection.value = null;
+    if (endpoint === 'arm-fingers') handsFailed.value = true;
+    if (endpoint === 'eyes') faceLandmarkerFailed.value = true;
+    // if (endpoint === 'head') faceDetectorFailed.value = true;
   }
-}
+};
 
 const stopDetection = () => {
   if (rafId) {
-    cancelAnimationFrame(rafId)
-    rafId = null
+    cancelAnimationFrame(rafId);
+    rafId = null;
   }
   if (jsonInterval) {
-    clearInterval(jsonInterval)
-    jsonInterval = null
+    clearInterval(jsonInterval);
+    jsonInterval = null;
   }
-}
+};
 
 const clearCanvas = () => {
-  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value
-  if (!canvas) return
+  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value;
+  if (!canvas) return;
   
-  const ctx = canvas.getContext('2d')
+  const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
-}
+};
 
 const drawPoseResults = (endpoint: string, results: any) => {
-  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value
-  if (!canvas) return
+  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value;
+  if (!canvas || !results.landmarks) return;
   
-  const ctx = canvas.getContext('2d')
-  if (!ctx || !results.poseLandmarks) return
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
 
-  const video = mode.value === 'camera' ? videoElement.value : null
+  const video = mode.value === 'camera' ? videoElement.value : null;
   if (video && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
   }
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  const width = canvas.width
-  const height = canvas.height
-  const landmarks = results.poseLandmarks.map((lm: any) => ({
-    x: lm.x * width,
-    y: lm.y * height,
-    z: lm.z,
-    visibility: lm.visibility
-  }))
+  const width = canvas.width;
+  const height = canvas.height;
 
-  if (endpoint === 'arm') {
-    drawArm(ctx, landmarks, [11, 13, 15], 'red')
-    drawArm(ctx, landmarks, [12, 14, 16], 'blue')
-  } else if (endpoint === 'people') {
-    drawFullPose(ctx, landmarks)
-  }
-}
+  results.landmarks.forEach((landmarks: any[]) => {
+    const scaledLandmarks = landmarks.map(lm => ({
+      x: lm.x * width,
+      y: lm.y * height,
+      z: lm.z,
+      visibility: lm.visibility || 0.5
+    }));
+
+    if (endpoint === 'arm') {
+      drawArm(ctx, scaledLandmarks, [11, 13, 15], 'red');
+      drawArm(ctx, scaledLandmarks, [12, 14, 16], 'blue');
+    } else if (endpoint === 'people') {
+      drawFullPose(ctx, scaledLandmarks);
+    }
+  });
+};
 
 const drawArm = (ctx: CanvasRenderingContext2D, landmarks: any[], indices: number[], color: string) => {
-  ctx.strokeStyle = color
-  ctx.fillStyle = color
-  ctx.lineWidth = 2
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
 
-  ctx.beginPath()
+  ctx.beginPath();
   indices.forEach((idx, i) => {
-    const lm = landmarks[idx]
-    if (lm.visibility < 0.5) return
+    const lm = landmarks[idx];
+    if (lm.visibility < 0.5) return;
     
-    if (i === 0) ctx.moveTo(lm.x, lm.y)
-    else ctx.lineTo(lm.x, lm.y)
+    if (i === 0) ctx.moveTo(lm.x, lm.y);
+    else ctx.lineTo(lm.x, lm.y);
     
-    ctx.beginPath()
-    ctx.arc(lm.x, lm.y, 4, 0, 2 * Math.PI)
-    ctx.fill()
-  })
-  ctx.stroke()
-}
+    ctx.beginPath();
+    ctx.arc(lm.x, lm.y, 4, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+  ctx.stroke();
+};
 
 const drawFullPose = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
   const connections = [
     [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
     [11, 23], [12, 24], [23, 24], [23, 25], [24, 26]
-  ]
+  ];
 
-  ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)'
-  ctx.fillStyle = 'rgba(0, 255, 0, 0.6)'
-  ctx.lineWidth = 2
+  ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
+  ctx.fillStyle = 'rgba(0, 255, 0, 0.6)';
+  ctx.lineWidth = 2;
 
   connections.forEach(([i, j]) => {
-    const lm1 = landmarks[i]
-    const lm2 = landmarks[j]
+    const lm1 = landmarks[i];
+    const lm2 = landmarks[j];
     
-    if (lm1.visibility < 0.5 || lm2.visibility < 0.5) return
+    if (lm1.visibility < 0.5 || lm2.visibility < 0.5) return;
     
-    ctx.beginPath()
-    ctx.moveTo(lm1.x, lm1.y)
-    ctx.lineTo(lm2.x, lm2.y)
-    ctx.stroke()
-  })
+    ctx.beginPath();
+    ctx.moveTo(lm1.x, lm1.y);
+    ctx.lineTo(lm2.x, lm2.y);
+    ctx.stroke();
+  });
 
-  landmarks.forEach((lm, idx) => {
-    if (lm.visibility < 0.5) return
+  landmarks.forEach((lm) => {
+    if (lm.visibility < 0.5) return;
     
-    ctx.beginPath()
-    ctx.arc(lm.x, lm.y, 3, 0, 2 * Math.PI)
-    ctx.fill()
-  })
-}
+    ctx.beginPath();
+    ctx.arc(lm.x, lm.y, 3, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+};
 
 const drawHandsResults = (results: any) => {
-  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value
-  if (!canvas) return
+  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value;
+  if (!canvas || !results.landmarks) return;
   
-  const ctx = canvas.getContext('2d')
-  if (!ctx || !results.multiHandLandmarks) return
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  const width = canvas.width
-  const height = canvas.height
+  const width = canvas.width;
+  const height = canvas.height;
 
-  results.multiHandLandmarks.forEach((landmarks: any, idx: number) => {
-    const handedness = results.multiHandedness[idx].classification[0].label
-    const color = handedness === 'Left' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 0, 255, 0.8)'
+  results.landmarks.forEach((landmarks: any[], idx: number) => {
+    const handedness = results.handednesses[idx][0].categoryName;
+    const color = handedness === 'Left' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 0, 255, 0.8)';
     
-    ctx.fillStyle = color
+    ctx.fillStyle = color;
     landmarks.forEach((lm: any) => {
-      const x = lm.x * width
-      const y = lm.y * height
-      ctx.beginPath()
-      ctx.arc(x, y, 3, 0, 2 * Math PI)
-      ctx.fill()
-    })
+      const x = lm.x * width;
+      const y = lm.y * height;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, 2 * Math.PI);
+      ctx.fill();
+    });
 
-    ctx.strokeStyle = color
-    ctx.lineWidth = 2
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
     
     const palmConnections = [
       [0, 1, 2, 5, 9, 13, 17, 0],
       [1, 5], [5, 9], [9, 13], [13, 17], [17, 0]
-    ]
+    ];
     
     palmConnections.forEach(conn => {
-      ctx.beginPath()
+      ctx.beginPath();
       conn.forEach((idx, i) => {
-        const lm = landmarks[idx]
-        const x = lm.x * width
-        const y = lm.y * height
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
-      })
-      ctx.stroke()
-    })
+        const lm = landmarks[idx];
+        const x = lm.x * width;
+        const y = lm.y * height;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
 
     const fingers = [
       [0, 1, 2, 3, 4],
@@ -673,224 +661,258 @@ const drawHandsResults = (results: any) => {
       [0, 9, 10, 11, 12],
       [0, 13, 14, 15, 16],
       [0, 17, 18, 19, 20]
-    ]
+    ];
     
     fingers.forEach(finger => {
-      ctx.beginPath()
+      ctx.beginPath();
       finger.forEach((idx, i) => {
-        const lm = landmarks[idx]
-        const x = lm.x * width
-        const y = lm.y * height
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
-      })
-      ctx.stroke()
-    })
-  })
-}
+        const lm = landmarks[idx];
+        const x = lm.x * width;
+        const y = lm.y * height;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+  });
+};
 
-const drawFaceMeshResults = (results: any) => {
-  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value
-  if (!canvas) return
+const drawFaceLandmarkerResults = (results: any) => {
+  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value;
+  if (!canvas || !results.faceLandmarks) return;
   
-  const ctx = canvas.getContext('2d')
-  if (!ctx || !results.multiFaceLandmarks) return
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  const width = canvas.width
-  const height = canvas.height
+  const width = canvas.width;
+  const height = canvas.height;
 
-  results.multiFaceLandmarks.forEach((landmarks: any) => {
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.8)'
+  results.faceLandmarks.forEach((landmarks: any[]) => {
+    ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
     
-    const leftIrisIndices = Array.from({length: 6}, (_, i) => 468 + i)
-    const rightIrisIndices = Array.from({length: 6}, (_, i) => 474 + i)
+    // Approximate eye landmarks (Tasks API doesn't provide explicit iris indices)
+    const leftEyeIndices = [33, 160, 158, 133, 153, 144];
+    const rightEyeIndices = [362, 385, 387, 263, 373, 380];
     
-    leftIrisIndices.concat(rightIrisIndices).forEach(idx => {
-      const lm = landmarks[idx]
-      if (!lm) return
+    leftEyeIndices.concat(rightEyeIndices).forEach(idx => {
+      const lm = landmarks[idx];
+      if (!lm) return;
       
-      const x = lm.x * width
-      const y = lm.y * height
-      ctx.beginPath()
-      ctx.arc(x, y, 2, 0, 2 * Math.PI)
-      ctx.fill()
-    })
-  })
-}
+      const x = lm.x * width;
+      const y = lm.y * height;
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, 2 * Math.PI);
+      ctx.fill();
+    });
+  });
+};
 
-const drawFaceDetectionResults = (results: any) => {
-  const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value
-  if (!canvas) return
-  
-  const ctx = canvas.getContext('2d')
-  if (!ctx || !results.detections) return
+// const drawFaceDetectorResults = (results: any) => {
+//   const canvas = mode.value === 'camera' ? canvasElement.value : uploadCanvasElement.value;
+//   if (!canvas || !results.detections) return;
+//   
+//   const ctx = canvas.getContext('2d');
+//   if (!ctx) return;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  
-  const width = canvas.width
-  const height = canvas.height
+//   ctx.clearRect(0, 0, canvas.width, canvas.height);
+//   
+//   const width = canvas.width;
+//   const height = canvas.height;
 
-  results.detections.forEach((detection: any) => {
-    const bbox = detection.locationData.relativeBoundingBox
-    const x = bbox.xmin * width
-    const y = bbox.ymin * height
-    const w = bbox.width * width
-    const h = bbox.height * height
+//   results.detections.forEach((detection: any) => {
+//     const bbox = detection.boundingBox;
+//     const x = bbox.originX;
+//     const y = bbox.originY;
+//     const w = bbox.width;
+//     const h = bbox.height;
 
-    ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)'
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.rect(x, y, w, h)
-    ctx.stroke()
+//     ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)';
+//     ctx.lineWidth = 2;
+//     ctx.beginPath();
+//     ctx.rect(x, y, w, h);
+//     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(255, 165, 0, 0.8)'
-    ctx.font = '14px Arial'
-    ctx.fillText(`Confidence: ${(detection.score[0] * 100).toFixed(1)}%`, x, y - 10)
+//     ctx.fillStyle = 'rgba(255, 165, 0, 0.8)';
+//     ctx.font = '14px Arial';
+//     ctx.fillText(`Confidence: ${(detection.categories[0].score * 100).toFixed(1)}%`, x, y - 10);
 
-    if (detection.locationData.relativeKeypoints) {
-      ctx.fillStyle = 'rgba(255, 0, 0, 0.8)'
-      detection.locationData.relativeKeypoints.forEach((kp: any) => {
-        const kpX = kp.x * width
-        const kpY = kp.y * height
-        ctx.beginPath()
-        ctx.arc(kpX, kpY, 3, 0, 2 * Math.PI)
-        ctx.fill()
-      })
-    }
-  })
-}
+//     if (detection.keypoints) {
+//       ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+//       detection.keypoints.forEach((kp: any) => {
+//         const kpX = kp.x * width;
+//         const kpY = kp.y * height;
+//         ctx.beginPath();
+//         ctx.arc(kpX, kpY, 3, 0, 2 * Math.PI);
+//         ctx.fill();
+//       });
+//     }
+//   });
+// };
 
 const fetchJsonResults = async (endpoint: string) => {
   try {
-    let imageSource: HTMLVideoElement | HTMLImageElement | null = null
+    let imageSource: HTMLVideoElement | HTMLImageElement | null = null;
     
     if (mode.value === 'camera') {
-      if (!videoElement.value) return
-      imageSource = videoElement.value
+      if (!videoElement.value) return;
+      imageSource = videoElement.value;
     } else {
-      if (!uploadedImage.value) return
-      const img = new Image()
-      img.src = uploadedImage.value!
+      if (!uploadedImage.value) return;
+      const img = new Image();
+      img.src = uploadedImage.value;
       await new Promise((resolve) => {
-        img.onload = resolve
-      })
-      imageSource = img
+        img.onload = resolve;
+      });
+      imageSource = img;
     }
 
-    if (!imageSource) return
+    if (!imageSource) return;
     
-    const canvas = document.createElement('canvas')
-    // Use type guard to handle HTMLVideoElement vs HTMLImageElement
+    const canvas = document.createElement('canvas');
     if (imageSource instanceof HTMLVideoElement) {
-      canvas.width = imageSource.videoWidth
-      canvas.height = imageSource.videoHeight
+      canvas.width = imageSource.videoWidth;
+      canvas.height = imageSource.videoHeight;
     } else {
-      canvas.width = imageSource.naturalWidth
-      canvas.height = imageSource.naturalHeight
+      canvas.width = imageSource.naturalWidth;
+      canvas.height = imageSource.naturalHeight;
     }
     
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     
-    ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height)
+    ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
     
     const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', 0.9)
-    })
+      canvas.toBlob(resolve, 'image/jpeg', 0.9);
+    });
     
-    if (!blob) return
+    if (!blob) return;
     
-    const file = new File([blob], 'frame.jpg', { type: 'image/jpeg' })
-    store.setFile(file)
+    const file = new File([blob], 'frame.jpg', { type: 'image/jpeg' });
+    store.setFile(file);
 
-    const response = await store.uploadImage(endpoint)
-    result.value = response
-    errorMessage.value = ''
+    const response = await store.uploadImage(endpoint);
+    if (endpoint === 'people' && response.landmarks) {
+      response.count = response.landmarks.length; // Adjust for backend compatibility
+    }
+    result.value = response;
+    errorMessage.value = '';
     
   } catch (error: any) {
-    console.error('Error fetching JSON:', error)
-    result.value = { error: `Failed to fetch results: ${error.message}` }
-    errorMessage.value = 'Detection failed. Check network or backend status.'
+    console.error('Error fetching JSON:', error);
+    result.value = { error: `Failed to fetch results: ${error.message}` };
+    errorMessage.value = 'Detection failed. Check network or backend status.';
   }
-}
+};
 
 const handleImageUpload = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  if (!input.files || !input.files[0]) return
+  const input = event.target as HTMLInputElement;
+  if (!input.files || !input.files[0]) return;
   
-  const file = input.files[0]
+  const file = input.files[0];
   if (file.size > 5 * 1024 * 1024) {
-    errorMessage.value = 'Image size exceeds 5MB limit'
-    return
+    errorMessage.value = 'Image size exceeds 5MB limit';
+    return;
   }
   
-  const reader = new FileReader()
+  const reader = new FileReader();
   reader.onload = (e) => {
-    uploadedImage.value = e.target?.result as string
-    store.setFile(file)
-    result.value = null
-    errorMessage.value = ''
+    uploadedImage.value = e.target?.result as string;
+    store.setFile(file);
+    result.value = null;
+    errorMessage.value = '';
     
     if (uploadCanvasElement.value) {
-      const img = new Image()
+      const img = new Image();
       img.onload = () => {
-        uploadCanvasElement.value!.width = img.width
-        uploadCanvasElement.value!.height = img.height
-      }
-      img.src = uploadedImage.value
+        uploadCanvasElement.value!.width = img.width;
+        uploadCanvasElement.value!.height = img.height;
+      };
+      img.src = uploadedImage.value;
     }
-  }
-  reader.readAsDataURL(file)
-}
+  };
+  reader.readAsDataURL(file);
+};
 
 const detectUploadedImage = async (endpoint: string) => {
   if (!store.file) {
-    errorMessage.value = 'Please upload an image first'
-    return
+    errorMessage.value = 'Please upload an image first';
+    return;
   }
 
   try {
-    activeDetection.value = endpoint
+    activeDetection.value = endpoint;
     
     if (endpoint === 'arm-fingers' && !handsFailed.value && uploadCanvasElement.value) {
-      if (!hands) {
-        hands = new window.Hands({
-          locateFile: (file: string) => `/mediapipe/${file}`
-        })
-        hands.setOptions({
-          maxNumHands: 2,
-          minDetectionConfidence: 0.5,
+      if (!handLandmarker) {
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: '/mediapipe/hands.task'
+          },
+          runningMode: 'IMAGE',
+          numHands: 2,
+          minHandDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5
-        })
-        hands.onResults((results: any) => drawHandsResults(results))
+        });
       }
       
-      if (uploadedImage.value) {
-        const img = new Image()
-        img.onload = () => {
-          hands.send({ image: img })
-        }
-        img.src = uploadedImage.value
+      if (uploadedImage.value && handLandmarker) {
+        const img = new Image();
+        img.onload = async () => {
+          if (handLandmarker) { // Explicit null check
+            const results = await handLandmarker.detect(img);
+            drawHandsResults(results);
+          }
+        };
+        img.src = uploadedImage.value;
       }
     }
+    // else if (endpoint === 'head' && !faceDetectorFailed.value && uploadCanvasElement.value) {
+    //   if (!faceDetector) {
+    //     faceDetector = await FaceDetector.createFromOptions(vision, {
+    //       baseOptions: {
+    //         modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.task'
+    //       },
+    //       runningMode: 'IMAGE',
+    //       minDetectionConfidence: 0.3
+    //     });
+    //   }
+    //   
+    //   if (uploadedImage.value && faceDetector) {
+    //     const img = new Image();
+    //     img.onload = async () => {
+    //       if (faceDetector) {
+    //         const results = await faceDetector.detect(img);
+    //         drawFaceDetectorResults(results);
+    //       }
+    //     };
+    //     img.src = uploadedImage.value;
+    //   }
+    // }
 
-    const response = await store.uploadImage(endpoint)
-    result.value = response
-    errorMessage.value = ''
+    const response = await store.uploadImage(endpoint);
+    if (endpoint === 'people' && response.landmarks) {
+      response.count = response.landmarks.length; // Adjust for backend compatibility
+    }
+    result.value = response;
+    errorMessage.value = '';
     
   } catch (error: any) {
-    console.error('Error detecting image:', error)
-    result.value = { error: `Detection failed: ${error.message}` }
-    errorMessage.value = 'Detection failed. Check network or backend status.'
-    activeDetection.value = null
+    console.error('Error detecting image:', error);
+    result.value = { error: `Detection failed: ${error.message}` };
+    errorMessage.value = 'Detection failed. Check network or backend status.';
+    activeDetection.value = null;
+    if (endpoint === 'arm-fingers') handsFailed.value = true;
+    if (endpoint === 'eyes') faceLandmarkerFailed.value = true;
+    // if (endpoint === 'head') faceDetectorFailed.value = true;
   }
-}
+};
 
 onUnmounted(() => {
-  stopCamera()
-})
+  stopCamera();
+});
 </script>
 
 <style scoped>
